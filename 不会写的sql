@@ -216,8 +216,7 @@
 
 
 
-
----dao层接口@Param注解的用法，标定参数的名字，mapper文件直接使用别名
+<!-- dao层接口@Param注解的用法，标定参数的名字，mapper文件直接使用别名 -->
 
   /**
      * IT管理员清单分页查询
@@ -227,9 +226,12 @@
      * @return 分页结果集
      */
     PagedResult<ItManagerVO> findPageList(@Param("vo") ItManagerVO vos, @Param("page") PageVO pageVO);
-  ---sql中直接使用vo对象代表接口参数中的 ItManagerVO vos
+
+<!-- sql中直接使用vo对象代表接口参数中的 ItManagerVO vos -->
     <sql id="configManageQuery">
         <if test='vo.employeeName != null and vo.employeeName !=""'>
+
+            <!-- LOWER()函数，mapper sql中如何使用like 模糊查询 -->
             and LOWER(p.employee_name) like concat(concat('%', LOWER(#{vo.employeeName,jdbcType=VARCHAR})),'%')
 
         </if>
@@ -251,3 +253,26 @@
             </if>
         </if>
     </sql>
+
+
+
+<!-- insert on duplicate key update 插入的时候更新 -->
+<!-- 批量插入 -->
+
+<update id="batchSaveOrUpdate">
+        insert  into it_manager_list (
+            rowKey,
+            employee_id
+        ) values
+        <foreach collection="vos" item="vo" index="index" separator=",">
+        (
+            #{vo.rowKey,jdbcType=VARCHAR},
+            #{vo.employeeId,jdbcType=VARCHAR}
+        )
+        </foreach>
+<!--on duplicate key update 如果插入数据跟表的主键重复则更新这里写的rowKey，employee_id字段，避免重复插入 -->
+        on duplicate key update
+        rowKey = values(rowKey),
+        employee_id = values(employee_id)
+ </update>
+
