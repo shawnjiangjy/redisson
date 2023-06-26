@@ -300,3 +300,23 @@
             </foreach>
         </if>
     </select>
+
+<!-- 批量删除 -->
+
+<!-- 接口 -->
+ /**
+     * 删除IT管理员
+     *
+     * @param vos 需要被删除的配置
+     */
+    void deleteItem(@Param("vos") List<ItManagerVO> vos);
+
+<!-- mapper sql -->
+<delete id="deleteItem">
+        <if test='vos != null and vos.size()>0'>
+            <foreach collection="vos" item="vo" close=";" separator=";">
+                delete from it_manager_list
+                WHERE rowkey = #{vo.rowKey, jdbcType=VARCHAR}
+            </foreach>
+        </if>
+    </delete>
