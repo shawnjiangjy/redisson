@@ -1,4 +1,5 @@
------------------------一个完整的mapper文件
+
+<!-- 一个完整的mapper文件 -->
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
@@ -23,7 +24,7 @@
         <result column="roles" property="roles"/>
     </resultMap>
 
----------------------------定义resultMap
+<!-- 定义resultMap -->
     <resultMap id="baseAllPeopleInfo" type="com.huawei.it.occsafe.vo.escalate.BaseAllPeopleInfoVO">
         <result column="EMPLOYEE_NUMBER" property="employeeNumber"/>
         <result column="UUID" property="uuid"/>
@@ -98,7 +99,9 @@
         from it_manager_list t
         left join it_employee_portrait p on t.employee_id = p.employee_id
         left join t_it_portrait_roles_by_lable r on t.employee_id = r.employee_id
+<!-- if标签的使用方法 -->
         <if test='vo != null'>
+<!-- where标签的使用方法 -->
             <where>
                 <include refid="configManageQuery"/>
             </where>
