@@ -320,3 +320,30 @@
             </foreach>
         </if>
     </delete>
+
+
+
+<!-- join :只有当两个where字句条件同时满足才能查到数据 -->
+<select id="getAllItportrait" resultMap="itManager">
+        select t.rowKey,t.employee_id from (
+            select rowKey, employee_id from it_employee_portrait t
+            <if test='vo != null'>
+                <if test='vo.employeeId != null and vo.employeeId !=""'>
+                    <where>
+                        UPPER(t.employee_id) = UPPER(#{vo.employeeId,jdbcType=VARCHAR})
+                    </where>
+                </if>
+            </if>
+        ) t
+        <if test='vo != null'>
+            <if test='vo.roles != null and vo.roles !=""'>
+                join (select * from it_employee_label_by_partition t
+                <where>
+                    <foreach collection="vo.roles.split(',')" open="and (" item="item" separator=" or " close=")">
+                        #{item} = 'Y'
+                    </foreach>
+                </where>
+                ) t2 on t.EMPLOYEE_ID = t2.employee_id
+            </if>
+        </if>
+    </select>
