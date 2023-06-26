@@ -259,6 +259,13 @@
 <!-- insert on duplicate key update 插入的时候更新 -->
 <!-- 批量插入 -->
 
+<!-- 接口 -->
+/**
+     * 批量插入数据
+     */
+    void batchSaveOrUpdate(@Param("vos") List<ItManagerVO> vos);
+
+<!-- mapper sql -->
 <update id="batchSaveOrUpdate">
         insert  into it_manager_list (
             rowKey,
