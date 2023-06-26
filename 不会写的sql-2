@@ -1,1 +1,7 @@
 
+ <sql id="popQueryCondition">
+        <foreach collection="vos" open="and LOWER(t.EMPLOYEE_ID) in (" item="item" separator=","
+                     close=")">
+                LOWER(#{item.employeeId,jdbcType=VARCHAR})
+        </foreach>
+    </sql>
