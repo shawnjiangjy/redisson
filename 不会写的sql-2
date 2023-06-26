@@ -48,3 +48,18 @@
             </foreach>
         </if>
     </update>
+
+
+<!-- 
+  case when then 用法 
+  t1.train_date 在mysql的数据类型是datetime 可以使用max(),min函数， > < =等比较
+  分组找最大
+  TIMESTAMPDIFF函数用法：TIMESTAMPDIFF(unit,datetime_expr1,datetime_expr2) ； SECOND：秒 DAY：天
+-->
+
+select t.employee_number as employee_id,t.domain_account as w3_account,t.chinese_name as name,t.dept_full_name as dept ,t2.train_date as latest_train_date,case when t4.last_year_train = 1 then '是' else '否' end as is_train_last_year ,case when t6.this_year_train = 1 then '是' else '否' end as is_train_this_year,t8.latest_train_day from BASE_PERSON_INFO_DISTRIBUTION t
+        left join ( select t1.employee_id ,max(t1.train_date) as train_date from T_OCC_HR_SECURITY_TRAIN t1 GROUP BY t1.employee_id)t2 on t.employee_number = t2.employee_id
+        left join ( select t3.employee_id,min(t3.is_training) as last_year_train from T_OCC_HR_SECURITY_TRAIN t3 where 1=1  <![CDATA[ and t3.train_date >= #{vo.lastYearStartDate} and t3.train_date <= #{vo.lastYearEndDate} ]]> GROUP BY t3.employee_id)t4 on t.employee_number = t4.employee_id
+        left join ( select t5.employee_id,min(t5.is_training) as this_year_train from T_OCC_HR_SECURITY_TRAIN t5 where 1=1  <![CDATA[ and t5.train_date >= #{vo.thisYearStartDate} and t5.train_date <= #{vo.thisYearEndDate} ]]> GROUP BY t5.employee_id)t6 on t.employee_number = t6.employee_id
+        left join (select t7.employee_id,min(TIMESTAMPDIFF(day,t7.train_date,sysdate())) as latest_train_day from T_OCC_HR_SECURITY_TRAIN t7 GROUP BY t7.employee_id) t8 on t.employee_number = t8.employee_id
+        where 1 = 1 and t.employed_flag='1'
