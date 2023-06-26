@@ -283,3 +283,20 @@
         employee_id = values(employee_id)
  </update>
 
+
+
+<!-- in + foreach查询 -->
+    <select id="findByRoleSignName" resultType="map">
+        SELECT
+            t.role_sign_name as roleSignName,
+            t.role_column_name as roleColumnName,
+            t.used
+        FROM
+            t_occ_hr_role_sign t where 1 = 1
+        <if test="roles != null and roles.size() > 0">
+            AND t.role_sign_name in
+            <foreach collection="roles" item="item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+    </select>
