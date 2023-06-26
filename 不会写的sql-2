@@ -14,3 +14,37 @@
             and t.TRAIN_DATE between str_to_date(#{vo.trainStartTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s') and
             str_to_date(#{vo.trainEndTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s')
         </if>
+
+
+
+<!-- 批量编辑 -->
+ <update id="batchUpdate">
+        <if test='vos != null and vos.size()>0'>
+            <foreach collection="vos" item="vo" close=";" separator=";">
+                UPDATE t_occ_hr_security_train set
+                <if test='vo.learningMethod != null'>
+                    LEARNING_METHOD = #{vo.learningMethod,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.isTraining != null'>
+                    IS_TRAINING = #{vo.isTraining,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.trainDate != null'>
+                    TRAIN_DATE = #{vo.trainDate},
+                </if>
+                <if test='vo.trainOrgan != null'>
+                    TRAIN_ORGAN = #{vo.trainOrgan,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.lastUpdatePerson != null '>
+                    LAST_UPDATE_PERSON = #{vo.lastUpdatePerson,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.attachmentName != null '>
+                    ATTACHMENT_NAME = #{vo.attachmentName,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.remark != null'>
+                    REMARK = #{vo.remark},
+                </if>
+                LAST_UPDATE_TIME = sysdate()
+                where ID = #{vo.id}
+            </foreach>
+        </if>
+    </update>
