@@ -1,7 +1,16 @@
-
+<!-- 将sql语句直接写到foreach的open里面 -->
  <sql id="popQueryCondition">
         <foreach collection="vos" open="and LOWER(t.EMPLOYEE_ID) in (" item="item" separator=","
                      close=")">
                 LOWER(#{item.employeeId,jdbcType=VARCHAR})
         </foreach>
     </sql>
+
+<!-- 时间比较
+  t.TRAIN_DATE：字段在mysql的数据类型需是datetime类型
+  str_to_date()函数将字符串转成datetimen类型
+-->
+ <if test='vo.trainStartTime != null and vo.trainStartTime !="" and vo.trainEndTime != null and vo.trainEndTime !="" '>
+            and t.TRAIN_DATE between str_to_date(#{vo.trainStartTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s') and
+            str_to_date(#{vo.trainEndTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s')
+        </if>
