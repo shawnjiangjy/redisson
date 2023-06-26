@@ -1,0 +1,250 @@
+-----------------------一个完整的mapper文件
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.huawei.it.occsafe.dao.monitor.ItManagerDao">
+    <resultMap id="itManager" type="com.huawei.it.occsafe.vo.monitor.ItManagerVO">
+        <result column="rowkey" property="rowKey"/>
+        <result column="employee_id" property="employeeId"/>
+        <result column="employee_w3" property="employeeW3"/>
+        <result column="employee_name" property="employeeName"/>
+        <result column="dept_all_name" property="deptAllName"/>
+        <result column="company_name" property="companyName"/>
+        <result column="dept_name_l1" property="deptNameL1"/>
+        <result column="dept_name_l2" property="deptNameL2"/>
+        <result column="dept_name_l3" property="deptNameL3"/>
+        <result column="dept_name_l4" property="deptNameL4"/>
+        <result column="job_status" property="jobStatus"/>
+        <result column="employee_type" property="employeeType"/>
+        <result column="entry_age_limit" property="entryAgeLimit"/>
+        <result column="product_domain" property="productDomain"/>
+        <result column="it_credit_value" property="itCreditValue"/>
+        <result column="filing_type" property="filingType"/>
+        <result column="roles" property="roles"/>
+    </resultMap>
+
+---------------------------定义resultMap
+    <resultMap id="baseAllPeopleInfo" type="com.huawei.it.occsafe.vo.escalate.BaseAllPeopleInfoVO">
+        <result column="EMPLOYEE_NUMBER" property="employeeNumber"/>
+        <result column="UUID" property="uuid"/>
+        <result column="w3_account" property="w3Accout"/>
+    </resultMap>
+
+
+    <sql id="configManageQuery">
+        <if test='vo.employeeName != null and vo.employeeName !=""'>
+            and LOWER(p.employee_name) like concat(concat('%', LOWER(#{vo.employeeName,jdbcType=VARCHAR})),'%')
+
+        </if>
+        <if test='vo.employeeId != null and vo.employeeId !=""'>
+            and UPPER(t.employee_id) = UPPER(#{vo.employeeId,jdbcType=VARCHAR})
+        </if>
+        <if test='vo.deptAllName != null and vo.deptAllName !=""'>
+            and LOWER(p.dept_all_name) like concat(concat('%', LOWER(#{vo.deptAllName,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.jobStatus != null and vo.jobStatus !=""'>
+            and p.job_status = #{vo.jobStatus,jdbcType=VARCHAR}
+        </if>
+        <if test='vo.employeeType != null and vo.employeeType !=""'>
+            <if test='vo.employeeType == "Y"'>
+                and (p.employee_type = 'EMP' or p.employee_type = 'EX_EMP')
+            </if>
+            <if test='vo.employeeType == "N"'>
+                and (p.EMPLOYEE_TYPE = 'OTH' or p.EMPLOYEE_TYPE = 'EX_OTH' or p.EMPLOYEE_TYPE ='' or p.EMPLOYEE_TYPE is null)
+            </if>
+        </if>
+    </sql>
+
+    <!-- 查询人员角色 -->
+    <select id="getEmployeeRoles" resultMap="itManager">
+        select employee_id, employee_name, roles from it_manager_list
+    </select>
+
+    <!-- 获取人员角色与角色字段名的映射 -->
+    <select id="findByRoleSignName" resultType="map">
+        SELECT
+            t.role_sign_name as roleSignName,
+            t.role_column_name as roleColumnName,
+            t.used
+        FROM
+            t_occ_hr_role_sign t where 1 = 1
+        <if test="roles != null and roles.size() > 0">
+            AND t.role_sign_name in
+            <foreach collection="roles" item="item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="findPageList" resultMap="itManager">
+        select
+            t.rowKey,
+            t.employee_id,
+            p.employee_w3,
+            p.employee_name,
+            p.dept_all_name,
+            p.company_name,
+            p.dept_name_l1,
+            p.dept_name_l2,
+            p.dept_name_l3,
+            p.dept_name_l4,
+            p.job_status,
+            p.employee_type,
+            p.entry_age_limit,
+            p.product_domain,
+            p.it_credit_value,
+            p.filing_type,
+            r.roles
+        from it_manager_list t
+        left join it_employee_portrait p on t.employee_id = p.employee_id
+        left join t_it_portrait_roles_by_lable r on t.employee_id = r.employee_id
+        <if test='vo != null'>
+            <where>
+                <include refid="configManageQuery"/>
+            </where>
+        </if>
+        limit #{page.mysqlStartIndex},#{page.pageSize}
+    </select>
+
+    <select id="findPageListCount" resultType="int">
+        select count(it.rowkey) from (select
+        t.rowKey,
+        t.employee_id,
+        p.employee_w3,
+        p.employee_name,
+        p.dept_all_name,
+        p.company_name,
+        p.dept_name_l1,
+        p.dept_name_l2,
+        p.dept_name_l3,
+        p.dept_name_l4,
+        p.job_status,
+        p.employee_type,
+        p.entry_age_limit,
+        p.product_domain,
+        p.it_credit_value,
+        p.filing_type,
+        r.roles
+        from it_manager_list t
+        left join it_employee_portrait p on t.employee_id = p.employee_id
+        left join t_it_portrait_roles_by_lable r on t.employee_id = r.employee_id
+        <if test='vo != null'>
+            <where>
+                <include refid="configManageQuery"/>
+            </where>
+        </if>
+        ) it
+    </select>
+
+    <delete id="deleteItem">
+        <if test='vos != null and vos.size()>0'>
+            <foreach collection="vos" item="vo" close=";" separator=";">
+                delete from it_manager_list
+                WHERE rowkey = #{vo.rowKey, jdbcType=VARCHAR}
+            </foreach>
+        </if>
+    </delete>
+
+    <delete id="clearItem">
+        delete from it_manager_list where 1=1
+    </delete>
+
+    <update id="batchSaveOrUpdate">
+        insert  into it_manager_list (
+            rowKey,
+            employee_id
+        ) values
+        <foreach collection="vos" item="vo" index="index" separator=",">
+        (
+            #{vo.rowKey,jdbcType=VARCHAR},
+            #{vo.employeeId,jdbcType=VARCHAR}
+        )
+        </foreach>
+        on duplicate key update
+        rowKey = values(rowKey),
+        employee_id = values(employee_id)
+    </update>
+
+    <update id="syncAll">
+        insert into it_manager_list (employee_id,rowKey)
+            SELECT
+               t1.employee_id as employee_id ,
+               IFNULL(t2.uuid,'') as rowKey
+             from it_employee_portrait t1
+             LEFT JOIN
+               base_hw_hr_all_people_info_new t2
+             on t1.employee_id = t2.employee_number
+         on duplicate key update
+         rowKey = values(rowKey),
+         employee_id = values(employee_id)
+    </update>
+
+    <select id="getAllItportrait" resultMap="itManager">
+        select t.rowKey,t.employee_id from (
+            select rowKey, employee_id from it_employee_portrait t
+            <if test='vo != null'>
+                <if test='vo.employeeId != null and vo.employeeId !=""'>
+                    <where>
+                        UPPER(t.employee_id) = UPPER(#{vo.employeeId,jdbcType=VARCHAR})
+                    </where>
+                </if>
+            </if>
+        ) t
+        <if test='vo != null'>
+            <if test='vo.roles != null and vo.roles !=""'>
+                join (select * from it_employee_label_by_partition t
+                <where>
+                    <foreach collection="vo.roles.split(',')" open="and (" item="item" separator=" or " close=")">
+                        #{item} = 'Y'
+                    </foreach>
+                </where>
+                ) t2 on t.EMPLOYEE_ID = t2.employee_id
+            </if>
+        </if>
+    </select>
+
+    <select id="getAllPeopleInfo" resultMap="baseAllPeopleInfo">
+        select employee_number, uuid from base_hw_hr_all_people_info_new where 1 = 1
+    </select>
+
+</mapper>
+
+
+
+
+
+
+---dao层接口@Param注解的用法，标定参数的名字，mapper文件直接使用别名
+
+  /**
+     * IT管理员清单分页查询
+     *
+     * @param vos 实体对象
+     * @param pageVO 分页对象
+     * @return 分页结果集
+     */
+    PagedResult<ItManagerVO> findPageList(@Param("vo") ItManagerVO vos, @Param("page") PageVO pageVO);
+  ---sql中直接使用vo对象代表接口参数中的 ItManagerVO vos
+    <sql id="configManageQuery">
+        <if test='vo.employeeName != null and vo.employeeName !=""'>
+            and LOWER(p.employee_name) like concat(concat('%', LOWER(#{vo.employeeName,jdbcType=VARCHAR})),'%')
+
+        </if>
+        <if test='vo.employeeId != null and vo.employeeId !=""'>
+            and UPPER(t.employee_id) = UPPER(#{vo.employeeId,jdbcType=VARCHAR})
+        </if>
+        <if test='vo.deptAllName != null and vo.deptAllName !=""'>
+            and LOWER(p.dept_all_name) like concat(concat('%', LOWER(#{vo.deptAllName,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.jobStatus != null and vo.jobStatus !=""'>
+            and p.job_status = #{vo.jobStatus,jdbcType=VARCHAR}
+        </if>
+        <if test='vo.employeeType != null and vo.employeeType !=""'>
+            <if test='vo.employeeType == "Y"'>
+                and (p.employee_type = 'EMP' or p.employee_type = 'EX_EMP')
+            </if>
+            <if test='vo.employeeType == "N"'>
+                and (p.EMPLOYEE_TYPE = 'OTH' or p.EMPLOYEE_TYPE = 'EX_OTH' or p.EMPLOYEE_TYPE ='' or p.EMPLOYEE_TYPE is null)
+            </if>
+        </if>
+    </sql>
