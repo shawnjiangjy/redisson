@@ -1,1 +1,531 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.huawei.it.occsafe.dao.admonitor.IAdminMonitoringDao">
+    <resultMap id="adminMonitoring" type="com.huawei.it.occsafe.vo.adminmonitor.AdminMonitoringVO">
+        <result column="ID" property="id"/>
+        <result column="WARNING_ID" property="warningId"/>
+        <result column="WARNING_TYPE" property="warningType"/>
+        <result column="WARNING_LEVEL" property="warningLevel"/>
+        <result column="WARNING_TIME" property="warningTime"/>
+        <result column="WARNING_INFO" property="warningInfo"/>
+        <result column="DEALER" property="dealer"/>
+        <result column="STATUS" property="status"/>
+        <result column="OP_SOURCE" property="opSource"/>
+        <result column="CREATER" property="createBy"/>
+        <result column="CREATER_TIME" property="createTime"/>
+        <result column="LAST_UPDATE_USER" property="lastUpdateBy"/>
+        <result column="LAST_UPDATE_TIME" property="lastUpdateTime"/>
+        <result column="DELETE_FLG" property="deleteFlag"/>
+        <result column="warning_mode" property="warningMode"/>
+        <result column="occurrence_time" property="occurrenceTime"/>
+        <result column="enter_lake_time" property="enterLakeTime"/>
+        <result column="remark" property="remark"/>
+        <result column="PROCESS_BY" property="processBy"/>
+        <result column="FALSE_REASON" property="falseReason"/>
+        <result column="DELETE_REASON" property="deleteReason"/>
+        <result column="TRACKING_TIME" property="trackingTime"/>
+        <result column="COMPLETED_TIME" property="completedTime"/>
+        <result column="CLASS" property="classType"/>
+        <result column="analyse_log" property="analyseLog"/>
+        <result column="warning_info_full" property="warningInfoFull"/>
+        <result column="risk_scenario" property="riskScenario"/>
+        <result column="fast_offline" property="fastOffline"/>
+        <result column="has_support_2" property="hasSupport2"/>
+        <result column="support_person_2" property="supportPerson2"/>
+        <result column="priority" property="priority"/>
+        <result column="monitor_type" property="monitorType"/>
+        <result column="check_person" property="checkPerson"/>
+        <result column="check_time" property="checkTime"/>
+        <result column="prevent_time" property="preventTime"/>
+    </resultMap>
+    <sql id="getModal">
+        select distinct (english_code),class,model_type,chinese_code,risk_scenario,maintenance_owner from t_ispp_monitor_model t where t.delete_flag='1'
+    </sql>
+
+    <sql id="getDistinctModal">
+        select distinct english_code from t_ispp_monitor_model t where t.delete_flag='1'
+    </sql>
+    <sql id="selectAll">
+        select t.ID,
+            t.WARNING_ID,
+            t.WARNING_TYPE,
+            t.WARNING_LEVEL,
+            t.WARNING_TIME,
+            t.WARNING_INFO,
+            t.warning_info_full,
+            t.DEALER,
+            t.STATUS,
+            t.OP_SOURCE,
+            t.CREATER,
+            t.CREATER_TIME,
+            t.LAST_UPDATE_USER,
+            t.LAST_UPDATE_TIME,
+            t.DELETE_FLG,
+            t.warning_mode,
+            t.occurrence_time,
+            t.enter_lake_time,
+            t.remark,
+            t.PROCESS_BY,
+            t.FALSE_REASON,
+            t.TRACKING_TIME,
+            t.COMPLETED_TIME,
+            t.support_person_2,
+            t.priority,
+            t.monitor_type,
+            t.check_person,
+            t.check_time,
+            (select t1.class from (<include refid="getModal"/>) t1 where t.WARNING_TYPE = t1.english_code) class,
+            t.analyse_log
+        from t_occ_hr_itadminmonitoring t
+    </sql>
+    <sql id="selectCols">
+        select t.ID,
+            t.prevent_time,
+            t.WARNING_ID,
+            t.WARNING_TYPE,
+            t.WARNING_LEVEL,
+            t.WARNING_TIME,
+            t.WARNING_INFO,
+            t.DEALER,
+            t.STATUS,
+            t.OP_SOURCE,
+            t.CREATER,
+            t.CREATER_TIME,
+            t.LAST_UPDATE_USER,
+            t.LAST_UPDATE_TIME,
+            t.DELETE_FLG,
+            t.warning_mode,
+            t.occurrence_time,
+            t.enter_lake_time,
+            t.remark,
+            t.PROCESS_BY,
+            t.FALSE_REASON,
+            t.DELETE_REASON,
+            t.TRACKING_TIME,
+            t.COMPLETED_TIME,
+            t.fast_offline,
+            t.support_person_2,
+            t.priority,
+            t.monitor_type,
+            t.check_person,
+            t.check_time,
+            t1.risk_scenario,
+            t1.maintenance_owner as maintenanceOwner,
+            (select t1.class from (<include refid="getModal"/>
+              <if test='vo != null'>
+	              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
+	                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
+	              </if>
+              </if>) t1 where t.WARNING_TYPE = t1.english_code) class
+        from t_occ_hr_itadminmonitoring t
+        join (<include refid="getModal"/>
+              <if test='vo != null'>
+	              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
+	                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
+	              </if>
+              </if>) t1 on t.WARNING_TYPE = t1.english_code
+    </sql>
+    <sql id="selectOffLineCols">
+        select t.ID,
+            t.prevent_time,
+            t.WARNING_ID,
+            t.WARNING_TYPE,
+            t.WARNING_LEVEL,
+            t.WARNING_TIME,
+            t.WARNING_INFO,
+            t.DEALER,
+            t.STATUS,
+            t.OP_SOURCE,
+            t.CREATER,
+            t.CREATER_TIME,
+            t.LAST_UPDATE_USER,
+            t.LAST_UPDATE_TIME,
+            t.DELETE_FLG,
+            t.warning_mode,
+            t.occurrence_time,
+            sysdate() as date2,
+            t.remark,
+            t.PROCESS_BY,
+            t.FALSE_REASON,
+            t.DELETE_REASON,
+            t.TRACKING_TIME,
+            t.COMPLETED_TIME,
+            t.fast_offline,
+            t.support_person_2,
+            t.priority,
+            t.monitor_type,
+            t.check_person,
+            t.check_time,
+            t1.risk_scenario,
+            t1.maintenance_owner as maintenanceOwner,
+            (select t1.class from (<include refid="getModal"/>
+                  <if test='vo != null'>
+		              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
+		                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
+		              </if>
+                  </if>) t1 where t.WARNING_TYPE = t1.english_code) class
+        from t_occ_hr_itadminmonitoring_offline t join (<include refid="getModal"/>
+	              <if test='vo != null'>
+		              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
+		                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
+		              </if>
+	              </if>) t1 on t.WARNING_TYPE = t1.english_code
+    </sql>
+
+    <sql id="query">
+        <if test='vo.dealer != null and vo.dealer !=""'>
+            and LOWER(t.DEALER) like concat(concat('%',LOWER(#{vo.dealer,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.warningType != null and vo.warningType !=""'>
+            <foreach collection="vo.warningType.split(',')" open="and t.warning_type in (" item="item" separator=","
+                     close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test='vo.modelState != null and vo.modelState !=""'>
+            <if test='vo.modelState == "已上线"'>
+                and t.model_state  = #{vo.modelState,jdbcType=VARCHAR}
+            </if>
+            <if test='vo.modelState == "未上线"'>
+                and (t.model_state  !='已上线' or t.model_state is null or model_state = '')
+            </if>
+        </if>
+        <if test='vo.deleteFlag =="0".toString'>
+            AND T.DELETE_FLG = 'N'
+        </if>
+        <if test='vo.monitorType !=null and vo.monitorType!=""'>
+            <foreach collection="vo.monitorType.split(',')" open="and t.monitor_type in (" item="item" separator=","
+                     close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test='vo.id > 0'>
+            and t.ID = #{vo.id,jdbcType=DECIMAL}
+        </if>
+        <if test='vo.warningId != null and vo.warningId !=""'>
+            and LOWER(t.WARNING_ID) like concat(concat('%',LOWER(#{vo.warningId,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.supportPerson2 != null and vo.supportPerson2 !=""'>
+            <foreach collection="vo.supportPerson2.split(',')" open="and t.support_person_2 in (" item="item" separator=","
+                     close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test='vo.priority != null and vo.priority !="" and vo.priority =="高"'>
+            and t.priority  = #{vo.priority,jdbcType=VARCHAR}
+        </if>
+        <if test='vo.status != null and vo.status !=""'>
+            <foreach collection="vo.status.split(',')" open="and t.STATUS in (" item="item" separator=","
+                     close=")">
+                #{item,jdbcType=VARCHAR}
+            </foreach>
+        </if>
+        <if test='vo.deStatus != null and vo.deStatus !=""'>
+            <foreach collection="vo.deStatus.split(',')" open="and t.STATUS not in (" item="item" separator=","
+                     close=")">
+                #{item,jdbcType=VARCHAR}
+            </foreach>
+        </if>
+        <if test='vo.warningStartTime != null and vo.warningStartTime !="" and vo.warningEndTime != null and vo.warningEndTime !="" '>
+            and t.WARNING_TIME between DATE_FORMAT(#{vo.warningStartTime,jdbcType=VARCHAR},'%Y/%m/%d %H:%i:%s') and
+            DATE_FORMAT(#{vo.warningEndTime,jdbcType=VARCHAR},'%Y/%m/%d %H:%i:%s')
+        </if>
+        <if test='vo.hourMinSecondStart >0 or vo.hourMinSecondEnd>0'>
+            and extract(hour_second from t.warning_time) between #{vo.hourMinSecondStart,jdbcType=NUMERIC} and  #{vo.hourMinSecondEnd,jdbcType=NUMERIC}
+        </if>
+        <if test='vo.search != null and vo.search != ""'>
+            AND t.WARNING_INFO LIKE concat('%' , TRIM(#{vo.search,jdbcType=VARCHAR}) , '%')
+        </if>
+    </sql>
+    <sql id ="warningListWithOutProcess">
+        select c.* from (
+        select a.* from(
+        <include refid="selectCols"/>
+        <if test='vo != null'>
+            <where>
+                <include refid="query"/>
+            </where>
+        </if>
+        ) a union all
+        select b.* from(
+        <include refid="selectOffLineCols"/>
+        <if test='vo != null'>
+            <where>
+                <include refid="query"/>
+            </where>
+        </if>
+        ) b
+        ) c order by c.WARNING_TIME desc
+    </sql>
+
+    <sql id ="orderedWarningListWithOutProcess">
+        SELECT * FROM
+        (
+        SELECT
+        (
+        CASE
+        WHEN x.`STATUS` = 'open' THEN 1
+        WHEN x.`STATUS` = 'tracking' THEN 2
+        WHEN x.`STATUS` = 'done' THEN 3
+        WHEN x.`STATUS` = 'false' THEN 4
+        WHEN x.`STATUS` = 'filed' THEN 5
+        END
+        ) AS statusOrder,
+        x.*
+        FROM
+        (         select a.* from(
+        <include refid="selectCols"/>
+        <if test='vo != null'>
+            <where>
+                <include refid="query"/>
+            </where>
+        </if>
+        ) a union all
+        select b.* from(
+        <include refid="selectOffLineCols"/>
+        <if test='vo != null'>
+            <where>
+                <include refid="query"/>
+            </where>
+        </if>
+        ) b ) x
+        ) y
+        ORDER BY
+        y.statusOrder,
+        y.warning_time DESC
+    </sql>
+    <sql id = "warningList">
+        select c.* from (
+        select a.* from(
+        <include refid="selectCols"/>
+        <if test='vo != null'>
+            <where>
+                <if test='vo.processBy =="business"'>
+                    and T.PROCESS_BY = 'business'
+                </if>
+                <if test='vo.processBy !="business"'>
+                    AND (T.PROCESS_BY = 'IT' or T.PROCESS_BY is null)
+                </if>
+                <include refid="query"/>
+                <include refid="warnTypeLimit"/>
+            </where>
+        </if>
+        ) a union all
+        select b.* from(
+        <include refid="selectOffLineCols"/>
+        <if test='vo != null'>
+            <where>
+                <if test='vo.processBy =="business"'>
+                    and T.PROCESS_BY = 'business'
+                </if>
+                <if test='vo.processBy !="business"'>
+                    AND (T.PROCESS_BY = 'IT' or T.PROCESS_BY is null)
+                </if>
+                <include refid="query"/>
+                <include refid="warnTypeLimit"/>
+            </where>
+        </if>
+        ) b
+        ) c order by c.WARNING_TIME desc
+    </sql>
+
+    <sql id="warnTypeLimit">
+        <if test='vo.isQueryLimit'>
+            <if test="vo.deptDimensions !=null and vo.deptDimensions.size()>0">
+                AND t.warning_person_dept REGEXP
+                <foreach collection="vo.deptDimensions" item="item" open="(" separator="|" close=")">
+                    #{item,jdbcType=VARCHAR}
+                </foreach>
+            </if>
+        </if>
+    </sql>
+
+    <select id="findWarningList" resultMap="adminMonitoring">
+        SELECT x.* FROM (<include refid="warningList"/>) x
+        limit #{page.mysqlStartIndex},#{page.pageSize}
+    </select>
+    <!-- 查询 -->
+    <select id="findWarningListCount" resultType="int">
+        SELECT count(1) from (<include refid="warningList"/>) x
+    </select>
+
+    <select id="findAllWarningList" resultMap="adminMonitoring">
+        <include refid="warningListWithOutProcess"/>
+    </select>
+
+    <select id="findOrderedWarningList" resultMap="adminMonitoring">
+        <include refid="orderedWarningListWithOutProcess"/>
+        limit #{page.mysqlStartIndex},#{page.pageSize}
+    </select>
+    <!-- 查询 -->
+    <select id="findOrderedWarningListCount" resultType="int">
+        SELECT count(*) from (<include refid="orderedWarningListWithOutProcess"/>) n
+    </select>
+
+    <select id="calcAllWarningList" resultType="java.util.Map">
+        SELECT
+        IFNULL(sum(case when t.process_by= 'business' and status = 'done' then 1 else 0 end ),0) as eventNum,
+        count(1) as alarmNum
+        from (<include refid="warningListWithOutProcess"/>) t
+    </select>
+
+    <update id="handWarningInfo">
+        <if test='vos != null and vos.size()>0'>
+            <foreach collection="vos" item="vo" close=";" separator=";">
+                UPDATE t_occ_hr_itadminmonitoring set
+                <if test='vo.preventTime != null and vo.preventTime != ""'>
+                    prevent_time = #{vo.preventTime,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.remark != null and vo.remark != ""'>
+                    remark = #{vo.remark,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.status !="tracking" and vo.status !="跟踪中" '>
+                    <if test='vo.completedTime ==null '>
+                        completed_time = sysdate(),
+                    </if>
+                </if>
+                <if test='vo.dealer !=null and vo.dealer!=""'>
+                    DEALER = #{vo.dealer,jdbcType=VARCHAR},
+                </if>
+                <!--<if test='vo.monitorType !=null and vo.monitorType!=""'>-->
+                <if test='vo.monitorType !=null'>
+                    monitor_type = #{vo.monitorType,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.falseReason != null and vo.falseReason != "" and vo.falseReason != "handle".toString() '>
+                    FALSE_REASON = #{vo.falseReason,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.falseReason == "handle".toString()'>
+                    FALSE_REASON = '',
+                </if>
+                <if test='vo.status != null and vo.status != ""'>
+                    status = #{vo.status,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.hasSupport2 != null and vo.hasSupport2 != ""'>
+                    has_support_2 = #{vo.hasSupport2,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.supportPerson2 != null and vo.supportPerson2 != ""'>
+                    support_person_2 = #{vo.supportPerson2,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.checkPerson != null and vo.checkPerson != ""'>
+                    check_person = #{vo.checkPerson,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.checkTime != null and vo.checkTime != ""'>
+                    check_time = sysdate(),
+                </if>
+                <if test='vo.processBy !="business"'>
+                    <if test='vo.trackingTime == null'>
+                        TRACKING_TIME = sysdate(),
+                    </if>
+                </if>
+                LAST_UPDATE_TIME = sysdate(),
+                LAST_UPDATE_USER =#{vo.userAccount,jdbcType=NUMERIC}
+                <if test='vo.id != null and !vo.id !=""'>
+                    where id=#{vo.id,jdbcType=NUMERIC}
+                </if>
+            </foreach>
+        </if>
+    </update>
+
+
+    <select id="getWarningTypeList" resultMap="adminMonitoring">
+        select distinct t1.warning_type from t_occ_hr_itadminmonitoring t1 join (<include refid="getModal"/>) t2 on t1.warning_type = t2.english_code where t1.PROCESS_BY ='business' and t1.warning_type is not null
+        union
+        select distinct t1.warning_type from t_occ_hr_itadminmonitoring_offline t1 join (<include refid="getModal"/>) t2 on t1.warning_type = t2.english_code where t1.PROCESS_BY='business' and t1.warning_type is not null
+    </select>
+
+    <select id="getBasicWarningTypeList" resultMap="adminMonitoring">
+        select distinct t1.warning_type from t_occ_hr_itadminmonitoring t1 join (<include refid="getModal"/>) t2 on t1.warning_type = t2.english_code where t1.warning_type is not null
+    </select>
+
+    <!-- 业务转it -->
+    <update id="businessToIt">
+        <foreach collection="list" item="item">
+            UPDATE t_occ_hr_itadminmonitoring
+            SET
+            <if test='item.dealer!=null and item.dealer!=""'>
+                dealer = #{item.dealer, jdbcType=VARCHAR},
+            </if>
+            process_by = 'IT',
+            LAST_UPDATE_TIME = sysdate(),
+            REMARK =#{item.remark, jdbcType=VARCHAR}
+            WHERE ID = #{item.id, jdbcType=NUMERIC} ;
+        </foreach>
+    </update>
+
+    <!-- 根据ID查询告警信息 -->
+    <select id="findWarningInfo" resultMap="adminMonitoring">
+        <include refid="selectAll"/>
+        WHERE ID = #{vo.id, jdbcType=NUMERIC}
+    </select>
+
+    <!-- 根据模糊warn_id查询告警信息 -->
+    <select id="findWarningInfoLikeId" resultMap="adminMonitoring">
+        <include refid="selectAll"/>
+        WHERE WARNING_ID like concat(#{vo.warningId, jdbcType=VARCHAR},'%')
+    </select>
+
+    <select id="statisticsAlarmIndicators" resultType="java.util.Map">
+        select
+            processCount,
+            totalCount,
+            ROUND(CASE WHEN b.trackingCount = 0 THEN 0 ELSE b.handleTime / b.trackingCount END, 2) AS handleDuration
+        from (
+        SELECT
+            sum( CASE WHEN process_by = 'business' and status = 'done' THEN 1 ELSE 0 END ) AS processCount,
+            count(*) AS totalCount,
+            sum(case when a.tracking_time is not null and a.status != 'open' then 1 else 0 end) as trackingCount,
+            sum(case when a.status != 'open' then TIMESTAMPDIFF(second,a.OCCURRENCE_TIME,a.tracking_time)/(60*60)  else 0 end) as handleTime
+        FROM
+            (
+            SELECT
+                process_by,t.tracking_time, t.OCCURRENCE_TIME, t.status
+            FROM
+                t_occ_hr_itadminmonitoring_offline t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
+            WHERE
+                warning_time BETWEEN concat( YEAR ( now()), '-01-01 00:00:00' )
+                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59')
+                AND t.model_state = '已上线'
+                AND delete_flg = 'N'
+            UNION ALL
+            SELECT
+                process_by,t.tracking_time, t.OCCURRENCE_TIME, t.status
+            FROM
+                t_occ_hr_itadminmonitoring t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
+            WHERE
+                warning_time BETWEEN concat( YEAR ( now()), '-01-01 00:00:00' )
+                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59')
+                AND t.model_state = '已上线'
+                AND delete_flg = 'N'
+            ) a )b
+    </select>
+
+
+    <select id="todayStatisticsAlarmIndicators" resultType="java.util.Map">
+        SELECT
+            sum( CASE WHEN process_by = 'business' and status = 'done' THEN 1 ELSE 0 END ) AS processCount,
+            count(*) AS totalCount
+        FROM
+            (
+            SELECT
+                process_by,status
+            FROM
+                t_occ_hr_itadminmonitoring_offline t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
+            WHERE
+                warning_time BETWEEN DATE_FORMAT( now(), '%Y-%m-%d 00:00:00' )
+                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59' )
+                AND t.model_state = '已上线'
+                AND delete_flg = 'N' UNION ALL
+            SELECT
+                process_by,status
+            FROM
+                t_occ_hr_itadminmonitoring t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
+            WHERE
+                warning_time BETWEEN DATE_FORMAT( now(), '%Y-%m-%d 00:00:00' )
+                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59' )
+                AND t.model_state = '已上线'
+                AND delete_flg = 'N'
+            ) a
+    </select>
+</mapper>
 
