@@ -157,7 +157,7 @@ export class LineChangeOption {
       this.series.push(obj)
     })
     if (flag) {
-      this.xAxis.axisLabel.rotate = 20
+      this.xAxis.axisLabel.rotate = 20 // x轴的数据太长时，旋转一定角度
     }
   }
   tooltip = {
