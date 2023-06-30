@@ -169,7 +169,7 @@ export class LineChangeOption {
     show: true,
     data: [],
     icon: 'circle',
-    type: 'scroll',
+    type: 'scroll', // 当图例很多时，可以实现类似分页效果
     orient: 'vertical',
     right: '1%',
     top: '5%'
