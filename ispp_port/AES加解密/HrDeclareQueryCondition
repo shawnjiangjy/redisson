@@ -98,9 +98,10 @@ public class HrDeclareQueryCondition {
         if (pageSize == 0) {
             return new ArrayList<>();
         }
-        double ceilDouble = new BigDecimal((float) totalSize / pageSize).setScale(2, BigDecimal.ROUND_HALF_UP)
+        // 手动计算分页
+        double ceilDouble = new BigDecimal((float) totalSize / pageSize).setScale(2, BigDecimal.ROUND_HALF_UP) // 保留两位有效数字
             .doubleValue();
-        int ceil = (int) Math.ceil(ceilDouble);
+        int ceil = (int) Math.ceil(ceilDouble); // 向上取整
         if (page > ceil) {
             return new ArrayList<>();
         }
