@@ -251,7 +251,7 @@ public class HrDeclareQueryCondition {
         }
         // 解密数据
         encrylist.stream().forEach(hrd -> {
-            // key(key=ispp123456)
+            // key(key=ispp123456) key = 3fF0rts@t0_Bu1!d
             hrd.setName(StringUtil.isNullOrEmpty(hrd.getName()) ? "" : AesgcmUtil.decrypyByGcm(hrd.getName(), key));
             hrd.setWorkNo(
                 StringUtil.isNullOrEmpty(hrd.getWorkNo()) ? "" : AesgcmUtil.decrypyByGcm(hrd.getWorkNo(), key));
