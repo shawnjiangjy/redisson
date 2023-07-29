@@ -110,9 +110,12 @@ public class HrDeclareServcies implements IHrDeclareService {
             pageVO.setPageSize(pageSize);
             HrDeclareVO ivo = JSONObject.parseObject(params, HrDeclareVO.class);
             ivo.setHighRiskMember("N");
+            // 因为数据库的数据是加密的，所以无法根据页面的条件在sql内进行查询，所以只能先查询出全部数据再解密之后进行筛选
             List<HrDeclareCalcVO> list = hrDeclareDao.findList();
+            // 解密数据
             List<HrDeclareCalcVO> decryList = HrDeclareQueryCondition.query(list, ivo);
             pageVO.setTotalRows(decryList.size());
+            // 手动分页
             List<HrDeclareCalcVO> splitList = HrDeclareQueryCondition.orderAndSplit(decryList, curPage, pageSize);
             pagedResult.setResult(splitList);
             pagedResult.setPageVO(pageVO);
