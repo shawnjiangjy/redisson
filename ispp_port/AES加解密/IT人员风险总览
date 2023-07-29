@@ -1,1 +1,28 @@
 
+//查询hr申报信息列表
+接口：services/hrDeclare/findHandlingAndProgressPageList/
+前台：
+created() {
+    this.$service.business.hrDeclare = args => {
+      return new Promise(resolve => {
+        let formData = this.formData
+        let params = JSON.stringify(formData)
+        this.$service.network
+          .get(
+            'services/hrDeclare/findHandlingAndProgressPageList/page/' +
+              `${args.pageVO.pageSize}/${
+                args.pageVO.curPage
+              }?params=${encodeURIComponent(params)}`
+          )
+          .then(data => {
+            resolve(data.data)
+          })
+      })
+    }
+  },
+
+定义后台接口：（@QueryParam  @PathParam）
+    @GET
+    @Path("/findHandlingAndProgressPageList/page/{pageSize}/{curPage}")
+    PagedResult<HrDeclareCalcVO> findHandlingAndProgressPageList(@QueryParam("params") String params,
+        @PathParam("pageSize") int pageSize, @PathParam("curPage") int curPage) throws ApplicationException;
