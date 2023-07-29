@@ -1,1 +1,145 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2021-2022. All rights reserved.
+ */
 
+package com.huawei.it.occsafe.util;
+
+import org.apache.commons.codec.binary.Base64;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+
+/**
+ * @author pWX814460
+ * @description aes gcm模式加解密
+ * @since 2020/6/23 18:11
+ */
+public class AesgcmUtil {
+
+    private static final String KEY_ALGORITHM = "AES";
+
+    private static final String DEFAULT_CIPHER_ALGORITHM = "AES/GCM/PKCS5Padding";
+
+    private static final int GCM_TAG_LENGTH = 128;
+
+    private static final int IV_LENGTH = 16;
+
+    private static final int PLUS_LENGTH = 16;
+
+    private static final int RAW_LENGTH = 16;
+
+    /**
+     * 创建Gcm实例
+     *
+     * @param key key
+     * @param ivb iv
+     * @param mode mode
+     * @return 返回Cipher实例
+     */
+    public static Cipher createGcm(String key, byte[] ivb, int mode) {
+        Cipher cipher = null;
+        try {
+            cipher = Cipher.getInstance(DEFAULT_CIPHER_ALGORITHM);
+            cipher.init(mode, getKey(key), new GCMParameterSpec(GCM_TAG_LENGTH, ivb));
+        } catch (NoSuchAlgorithmException exception) {
+            LogUtil.error("createGcm error", exception);
+        } catch (NoSuchPaddingException | InvalidKeyException | InvalidAlgorithmParameterException exception) {
+            LogUtil.error("createGcm error", exception);
+        }
+        return cipher;
+    }
+
+    /**
+     * 加密
+     *
+     * @param encryptStr 加密字符串
+     * @param key 密钥
+     * @return 返回加密字符串
+     * @throws Exception 异常
+     */
+    public static String encryptByGcm(String encryptStr, String key) {
+        byte[] ivb = generateSecureBytes(IV_LENGTH);
+        final Cipher gcmCipher = createGcm(key, ivb, Cipher.ENCRYPT_MODE);
+        byte[] encrypted = new byte[0];
+        try {
+            byte[] input = encryptStr.getBytes(StandardCharsets.UTF_8);
+            encrypted = gcmCipher.doFinal(input);
+        } catch (IllegalBlockSizeException exception) {
+            LogUtil.error("encryptByGcm error", exception);
+        } catch (BadPaddingException exception) {
+            LogUtil.error("encryptByGcm error", exception);
+        }
+        byte[] data = new byte[IV_LENGTH + encrypted.length];
+        System.arraycopy(ivb, 0, data, 0, IV_LENGTH);
+        System.arraycopy(encrypted, 0, data, IV_LENGTH, encrypted.length);
+        return Base64.encodeBase64String(data);
+    }
+
+    /**
+     * 解密
+     *
+     * @param decrypyStr 解密字符串
+     * @param key 密钥
+     * @return 返回解密字符串
+     * @throws Exception 异常
+     */
+    public static String decrypyByGcm(String decrypyStr, String key) {
+        try {
+            byte[] input = Base64.decodeBase64(decrypyStr);
+            byte[] ivb = new byte[IV_LENGTH];
+            System.arraycopy(input, 0, ivb, 0, IV_LENGTH);
+            final Cipher gcmCipher = createGcm(key, ivb, Cipher.DECRYPT_MODE);
+            byte[] encrypted = new byte[input.length - IV_LENGTH];
+            System.arraycopy(input, IV_LENGTH, encrypted, 0, encrypted.length);
+            return new String(gcmCipher.doFinal(encrypted), StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            LogUtil.error("decrypyByGcm error", exception);
+            return "";
+        }
+    }
+
+    /**
+     * generateSecureBytes
+     *
+     * @param num num
+     * @return 返回
+     */
+    public static byte[] generateSecureBytes(int num) {
+        byte[] bytes = new byte[num];
+        new SecureRandom().nextBytes(bytes);
+        return bytes;
+    }
+
+    /**
+     * getKey
+     *
+     * @param myKey myKey
+     * @return SecretKeySpec
+     */
+    public static SecretKeySpec getKey(String myKey) {
+        int plus = PLUS_LENGTH - myKey.trim().length();
+        byte[] data = myKey.trim().getBytes(StandardCharsets.UTF_8);
+        byte[] raw = new byte[RAW_LENGTH];
+        byte[] plusByte = {
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+        };
+        for (int i = 0; i < RAW_LENGTH; i++) {
+            if (data.length > i) {
+                raw[i] = data[i];
+            } else {
+                raw[i] = plusByte[plus];
+            }
+        }
+        return new SecretKeySpec(raw, KEY_ALGORITHM);
+    }
+}
