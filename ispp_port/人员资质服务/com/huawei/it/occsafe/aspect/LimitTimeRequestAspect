@@ -1,1 +1,161 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.aspect;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import com.huawei.it.occsafe.config.TaskExecutorConfiguration;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponse;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponseWrap;
+import com.huawei.it.occsafe.service.impl.qualifications.config.QualificationConfig;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.util.ThreadUtil;
+
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import javax.annotation.PreDestroy;
+import javax.inject.Inject;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
+
+/**
+ * @author pWX814460
+ * @description 资质查询接口的切面，限制接口访问时间以及 日志记录
+ * @since 2020/11/9 14:37
+ */
+@Aspect
+@Component
+public class LimitTimeRequestAspect implements IAspect, IPointcut {
+
+    private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(1,
+        new ThreadFactoryBuilder().setDaemon(true).setNameFormat("LimitTimeFailAfter-%d").build());
+
+    @Inject
+    private TaskExecutorConfiguration taskExecutor;
+
+    /**
+     * controllerList aspect
+     */
+    @Pointcut("@annotation(com.huawei.it.occsafe.annotation.LimitTimeRequest)")
+    public void limitTimeRequest() {
+    }
+
+    @Override
+    public Object doAfter(JoinPoint joinPoint) {
+        return new Object();
+    }
+
+    /**
+     * doAround
+     *
+     * @param joinPoint 织入点
+     * @return 返回值
+     * @throws Throwable 异常信息
+     */
+    @Around("limitTimeRequest()")
+    @Override
+    public Object doAround(ProceedingJoinPoint joinPoint) {
+        // 参数
+        QualificationsRequest request = (QualificationsRequest) joinPoint.getArgs()[0];
+        // 验证通过
+        LogUtil.info("----------------start query--------------");
+        QualificationsResponseWrap qualificationsResponseWrap = warp(joinPoint, request);
+        // 如果执行时间超过10s 那么直接返回true
+        LogUtil.info("----------------end query----------------");
+        return qualificationsResponseWrap;
+    }
+
+    private QualificationsResponseWrap warp(ProceedingJoinPoint joinPoint, QualificationsRequest request) {
+        long limitTime = QualificationConfig.DEFAULT.getQueryLimitTime();
+        ServletRequestAttributes requestAttributes
+            = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        CompletableFuture<QualificationsResponseWrap> future = CompletableFuture.supplyAsync(() -> {
+            try {
+                RequestContextHolder.setRequestAttributes(requestAttributes);
+                QualificationsResponseWrap warp = (QualificationsResponseWrap) joinPoint.proceed();
+                LogUtil.info("done warp!");
+                return warp;
+            } catch (Throwable throwable) {
+                LogUtil.info("warp error" + throwable.getMessage());
+                return getException(request, "9999", "warp error!");
+            }
+        }, taskExecutor.limitTimeTaskExecutor());
+        CompletableFuture<QualificationsResponseWrap> within = within(future, Duration.ofSeconds(limitTime),
+            TimeUnit.MILLISECONDS).exceptionally(exception1 -> {
+            LogUtil.error("qualification timeout!");
+            LogUtil.error("--------------The query time exceeds the maximum" + limitTime
+                + "seconds,return timeout unchecked--------------");
+                return getException(request, "8", QualificationConfig.TIMEOUT_NOT_CHECK);
+        });
+        return within.join();
+    }
+
+    private QualificationsResponseWrap getException(QualificationsRequest request, String scenario, String errorMsg) {
+        List<QualificationsResponse> response = new ArrayList<>();
+        String w3account = request.getW3account();
+        String[] splitW3account = w3account.split(",");
+        List<String> w3accountList = Arrays.asList(splitW3account);
+        w3accountList.stream().forEach(item -> {
+            QualificationsResponse qualificationsResponse = new QualificationsResponse(item.toLowerCase(Locale.ROOT),
+                scenario, true, errorMsg);
+            response.add(qualificationsResponse);
+        });
+        return new QualificationsResponseWrap(response, request, new HashMap<>());
+    }
+
+    /**
+     * 返回一个超时的预期事件future
+     *
+     * @param duration 超时
+     * @param unit 事件单位
+     * @param <T> 返回对象反省
+     * @return 返回一个异步超时事件
+     */
+    public static <T> CompletableFuture timeoutAfter(Duration duration, TimeUnit unit) {
+        CompletableFuture<T> result = new CompletableFuture<>();
+        SCHEDULER.schedule(() -> result.completeExceptionally(new TimeoutException()), duration.toMillis(), unit);
+        return result;
+    }
+
+    /**
+     * 两者中有一个先完成就返回哪一个预期事件  future/timeout
+     *
+     * @param future 实际的异步事件
+     * @param duration 超时
+     * @param unit 事件单位
+     * @param <T> 返回对象泛型
+     * @return 返回完成的异步事件
+     */
+    public static <T> CompletableFuture<T> within(CompletableFuture<T> future, Duration duration, TimeUnit unit) {
+        CompletableFuture timeout = timeoutAfter(duration, unit);
+        return future.applyToEither(timeout, Function.identity());
+    }
+
+    @PreDestroy
+    private void des() {
+        ThreadUtil.close(SCHEDULER, this.getClass());
+        taskExecutor.limitTimeTaskExecutor().destroy();
+    }
+}
 
