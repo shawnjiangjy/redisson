@@ -1,1 +1,451 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2019-2019. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.portrait;
+
+import com.alibaba.fastjson.JSONObject;
+
+import com.huawei.it.jalor5.core.annotation.JalorOperation;
+import com.huawei.it.jalor5.core.annotation.JalorResource;
+import com.huawei.it.jalor5.core.base.PageVO;
+import com.huawei.it.jalor5.core.base.PagedResult;
+import com.huawei.it.jalor5.core.exception.ApplicationException;
+import com.huawei.it.jalor5.core.util.CollectionUtil;
+import com.huawei.it.jalor5.core.util.DateUtil;
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.occsafe.dao.IAntiTheftRiskManagementDao;
+import com.huawei.it.occsafe.dao.portrait.IRoleSignDao;
+import com.huawei.it.occsafe.service.IProcedureService;
+import com.huawei.it.occsafe.service.portrait.IRoleSignService;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.vo.AntiTheftRiskManagementVO;
+import com.huawei.it.occsafe.vo.ResultVo;
+import com.huawei.it.occsafe.vo.portrait.RoleSignVO;
+
+import org.apache.commons.collections4.CollectionUtils;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 人员标签配置
+ *
+ * @author pwx814460
+ * @since 2021/08/05
+ */
+@Named
+@JalorResource(code = "Occ.RoleSign", desc = "人员标签配置")
+public class RoleSignService implements IRoleSignService {
+
+    private static final String[] SENSITIVE_LIST = {
+        "alter", "ALTER", "drop", "DROP", "truncate", "delete", "TRUNCATE", "DELETE", ";"
+    };
+
+    @Inject
+    private IRoleSignDao roleSignDao;
+
+    @Inject
+    private IAntiTheftRiskManagementDao antiTheftRiskManagementDao;
+
+    @Inject
+    private IProcedureService procedureService;
+
+    @Override
+    @JalorOperation(code = "findRoleSignList", desc = "findRoleSignList")
+    public PagedResult<RoleSignVO> findRoleSignList(String params, int pageSize, int curPage)
+        throws ApplicationException {
+        PagedResult<RoleSignVO> res = new PagedResult();
+        try {
+            PageVO pageVO = new PageVO();
+            pageVO.setCurPage(curPage);
+            pageVO.setPageSize(pageSize);
+            RoleSignVO ivo = JSONObject.parseObject(params, RoleSignVO.class);
+            res = roleSignDao.findRoleSignList(ivo, pageVO);
+            List<RoleSignVO> result = res.getResult();
+            // regexp会查询出多余的数据 result需要做截取
+            resultHandler(ivo.getRiskName(), result);
+            List<Map<String, BigDecimal>> totalStasticCountList = getTotalStasticCount(result);
+            Set<String> riskNameSet = result.stream()
+                .map(RoleSignVO::getRiskName)
+                .filter(item -> !StringUtil.isNullOrEmpty(item))
+                .collect(Collectors.toSet());
+            // 查出所有的风险名称，根据告警名称查询风险编号，形成风险名称:风险编号 键值对，并重新赋值z
+            Map<String, String> riskNameRiskNoMap = new HashMap<>();
+            if (!CollectionUtil.isNullOrEmpty(riskNameSet)) {
+                AntiTheftRiskManagementVO avo = new AntiTheftRiskManagementVO();
+                avo.setRiskName(String.join(";", riskNameSet));
+                List<AntiTheftRiskManagementVO> antiTheftRiskManagementVOS
+                    = antiTheftRiskManagementDao.queryByRiskNames(avo);
+                riskNameRiskNoMap = antiTheftRiskManagementVOS.stream()
+                    .collect(
+                        Collectors.toMap(AntiTheftRiskManagementVO::getRiskName, AntiTheftRiskManagementVO::getRiskNo));
+            }
+            final Map<String, String> finalRiskNameRiskNoMap = riskNameRiskNoMap;
+            result.stream().forEach(roleSign -> {
+                totalPersonRolesSet(roleSign, totalStasticCountList);
+                if (!StringUtil.isNullOrEmpty(roleSign.getRiskName())) {
+                    String[] splitRiskName = roleSign.getRiskName().split(";");
+                    List<String> riskNames = Arrays.asList(splitRiskName);
+                    List<String> riskNos = new ArrayList<>();
+                    riskNames.forEach(riskName -> {
+                        riskNos.add(finalRiskNameRiskNoMap.get(riskName));
+                    });
+                    roleSign.setRiskNo(String.join(";", riskNos));
+                }
+            });
+        } catch (Exception exception) {
+            LogUtil.error("findRoleSignList error", exception);
+        }
+        return res;
+    }
+
+    /**
+     * 重新截取result
+     *
+     * @param riskName 以逗号分隔的字符串
+     * @param result
+     */
+    private void resultHandler(String riskName, List<RoleSignVO> result) {
+        if (StringUtil.isNullOrEmpty(riskName)) {
+            return;
+        }
+        List<String> riskNameList = Arrays.asList(riskName.split("\\|"));
+        result.stream().forEach(item -> {
+            // 返回的riskName
+            String riskName1 = item.getRiskName();
+            // 只保留被riskNameList包含的riskName,并重新设置item的riskName
+            String[] split = riskName1.split(";");
+            List<String> resultRiskNameList = new ArrayList<>(Arrays.asList(split));
+            List<String> collect = resultRiskNameList.stream()
+                .filter(rrn -> riskNameList.contains(rrn))
+                .collect(Collectors.toList());
+            if (!CollectionUtil.isNullOrEmpty(collect)) {
+                item.setRiskName(String.join(";", collect));
+            }
+        });
+    }
+
+    private Set<String> filterRoleColumnName(Set<String> roleColumnNameSet) {
+        if (CollectionUtil.isNullOrEmpty(roleColumnNameSet)) {
+            return roleColumnNameSet;
+        }
+        return roleColumnNameSet.stream().filter(roleColumnName -> {
+            List<String> sensitiveList = Arrays.asList(SENSITIVE_LIST);
+            List<String> collect = sensitiveList.stream()
+                .filter(sensitive -> roleColumnName.indexOf(sensitive) > -1)
+                .collect(Collectors.toList());
+            return CollectionUtil.isNullOrEmpty(collect);
+        }).collect(Collectors.toSet());
+    }
+
+    @Override
+    public List<Map<String, BigDecimal>> getTotalStasticCount(List<RoleSignVO> result) {
+        Set<String> roleColumnNameSet = result.stream()
+            .map(RoleSignVO::getRoleColumnName)
+            .filter(item -> !StringUtil.isNullOrEmpty(item))
+            .collect(Collectors.toSet());
+        // 获取各个人员角色的总数
+        List<Map<String, BigDecimal>> employeeLabelStastic = new ArrayList<>();
+        // 避免传入敏感字段
+        Set<String> safeRoleColumnNameSet = filterRoleColumnName(roleColumnNameSet);
+        if (!CollectionUtil.isNullOrEmpty(safeRoleColumnNameSet)) {
+            List<Map<String, String>> existEmployeeLabel = roleSignDao.findExistEmployeeLabel(
+                String.join(",", roleColumnNameSet));
+            String execSql = getExecSql(existEmployeeLabel);
+            if (!StringUtil.isNullOrEmpty(execSql)) {
+                employeeLabelStastic = roleSignDao.findEmployeeLabelStastic(execSql);
+            }
+        }
+        return employeeLabelStastic;
+    }
+
+    /**
+     * 获取所有的角色大类
+     *
+     * @return 人员角色大类
+     */
+    @Override
+    @JalorOperation(code = "getRoleTypeList", desc = "查询角色标签大类")
+    public List<RoleSignVO> getRoleTypeList() {
+        List<RoleSignVO> allRoleTypeList = new ArrayList<>();
+        try {
+            RoleSignVO roleSignVO = new RoleSignVO();
+            allRoleTypeList = roleSignDao.findAllRoleTypeList();
+        } catch (Exception exception) {
+            LogUtil.error("getAllRoleSignList error", exception);
+        }
+        return allRoleTypeList;
+    }
+
+    @Override
+    public List<RoleSignVO> getRoleColumnNameList(String roleColumnName) {
+        List<RoleSignVO> allRoleColumnNameList = new ArrayList<>();
+        try {
+            allRoleColumnNameList = roleSignDao.getRoleColumnNameList(roleColumnName);
+        } catch (Exception exception) {
+            LogUtil.error("getRoleColumnNameList error", exception);
+        }
+        return allRoleColumnNameList;
+    }
+
+    private String getExecSql(List<Map<String, String>> existEmployeeLabel) {
+        if (CollectionUtil.isNullOrEmpty(existEmployeeLabel)) {
+            return "";
+        }
+        List<String> collect = existEmployeeLabel.stream()
+            .filter(item -> !StringUtil.isNullOrEmpty(item.get("column_name")))
+            .map(item -> {
+                String value = item.get("column_name");
+                return "sum(case when t." + value + " = 'Y' then 1 else 0 end) as '" + value + "' ";
+            })
+            .collect(Collectors.toList());
+        return String.join(",", collect);
+    }
+
+    private void totalPersonRolesSet(RoleSignVO roleSign, List<Map<String, BigDecimal>> employeeLabelStastic) {
+        if (CollectionUtil.isNullOrEmpty(employeeLabelStastic)) {
+            return;
+        }
+        String roleColumnName = roleSign.getRoleColumnName();
+        Map<String, BigDecimal> stringStringMap = employeeLabelStastic.get(0);
+        if (stringStringMap.containsKey(roleColumnName)) {
+            roleSign.setTotalPersonRoles(stringStringMap.get(roleColumnName).intValue());
+        }
+    }
+
+    @Override
+    @JalorOperation(code = "getAllRoleSignList", desc = "获取所有的人员角色标签")
+    public List<RoleSignVO> getAllRoleSignList(String params) {
+        List<RoleSignVO> allRoleSignList = new ArrayList<>();
+        try {
+            Boolean falga = false;
+            falga = permissionControl(params, falga);
+            RoleSignVO roleSignVO = new RoleSignVO();
+            roleSignVO.setUsed("Y");
+            if (falga) {
+                allRoleSignList = roleSignDao.findAllRoleSignList(roleSignVO);
+            } else {
+                roleSignVO.setExternalOpen("Y");
+                allRoleSignList = roleSignDao.findAllRoleSignList(roleSignVO);
+            }
+        } catch (Exception exception) {
+            LogUtil.error("getAllRoleSignList error", exception);
+        }
+        return allRoleSignList;
+    }
+
+    @Override
+    public List<RoleSignVO> getRoleNameList(String params) {
+        List<RoleSignVO> allRoleSignList = new ArrayList<>();
+        try {
+            RoleSignVO roleSignVO = new RoleSignVO();
+            allRoleSignList = roleSignDao.findAllRoleSignList(roleSignVO);
+        } catch (Exception exception) {
+            LogUtil.error("getAllRoleSignList error", exception);
+        }
+        return allRoleSignList;
+    }
+
+    private Boolean permissionControl(String roleNames, Boolean falga) {
+        List<String> params = new ArrayList<>();
+        params.add("监控模型配置");
+        params.add("System Admin");
+        params.add("信管办安全管理员");
+        params.add("信管办IT运维人员");
+        params.add("一键申报服务管理员");
+        String[] peRoleList = roleNames.split("\\|");
+        if (peRoleList != null && peRoleList.length > 0) {
+            for (String role : peRoleList) {
+                if (params.contains(role)) {
+                    falga = true;
+                    break;
+                }
+            }
+        }
+        return falga;
+    }
+
+    @Override
+    @JalorOperation(code = "saveOrUpdate", desc = "saveOrUpdate")
+    public ResultVo saveOrUpdate(List<RoleSignVO> vos) {
+        ResultVo result = new ResultVo(false, "");
+        try {
+            if (!CollectionUtils.isEmpty(vos)) {
+                vos.stream().forEach(item -> {
+                    item.setCreateTime(DateUtil.dateToString(new Date(), "yyyy-MM-dd HH:mm:ss"));
+                });
+                roleSignDao.batchSave(vos);
+                // 根据新增人员标签 给人员角色表添加字段
+                List<String> collect = vos.stream().map(RoleSignVO::getRoleColumnName).collect(Collectors.toList());
+                if (!CollectionUtils.isEmpty(collect)) {
+                    roleSignDao.addColumn(collect);
+                    procedureService.createProcedure();
+                }
+            }
+            result.setState(true);
+            result.setResult("success");
+        } catch (Exception exception) {
+            LogUtil.error("saveOrUpdate error!", exception);
+            result.setResult(exception.getMessage());
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @JalorOperation(code = "update", desc = "update")
+    public ResultVo update(List<RoleSignVO> vos) {
+        ResultVo result = new ResultVo(false, "");
+        try {
+            if (!CollectionUtils.isEmpty(vos)) {
+                vos.stream().forEach(item -> {
+                    item.setCreateTime(DateUtil.dateToString(new Date(), "yyyy-MM-dd HH:mm:ss"));
+                });
+                roleSignDao.batchUpdate(vos);
+            }
+            result.setState(true);
+            result.setResult("success");
+        } catch (Exception exception) {
+            LogUtil.error("update error!", exception);
+            result.setResult(exception.getMessage());
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @JalorOperation(code = "queryOrder", desc = "queryOrder")
+    public ResultVo queryOrder(String order) {
+        ResultVo result = new ResultVo(true, "");
+        try {
+            if (StringUtil.isNullOrEmpty(order)) {
+                return result;
+            }
+            Integer integer = Integer.valueOf(order);
+            List<RoleSignVO> byOrder = roleSignDao.findByOrder(integer);
+            if (byOrder.size() > 0) {
+                result.setState(true);
+                result.setResult("success");
+            }
+            result.setState(false);
+        } catch (Exception exception) {
+            LogUtil.error("queryOrder error!", exception);
+            result.setResult("error");
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @JalorOperation(code = "queryRoleColumnName", desc = "queryRoleColumnName")
+    public ResultVo queryRoleColumnName(String roleColumnName) {
+        ResultVo result = new ResultVo(true, "");
+        try {
+            if (StringUtil.isNullOrEmpty(roleColumnName)) {
+                return result;
+            }
+            List<String> roleColumnNames = new ArrayList<>();
+            roleColumnNames.add(roleColumnName);
+            List<RoleSignVO> byRoleColumnName = roleSignDao.findByRoleColumnName(roleColumnNames, null, null);
+            if (byRoleColumnName.size() > 0) {
+                result.setState(true);
+                result.setResult("success");
+            }
+            result.setState(false);
+        } catch (Exception exception) {
+            LogUtil.error("queryRoleColumnName error!", exception);
+            result.setResult("error");
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @JalorOperation(code = "findEmployeeLabel", desc = "获取人员标签")
+    public Set<String> findEmployeeLabel(String employeeId, String params) {
+        Boolean falga = false;
+        falga = permissionControl(params, falga);
+        Set<String> sets = new HashSet<>();
+        try {
+            List<RoleSignVO> byRoleColumnName;
+            List<Map<String, String>> employeeLabel = roleSignDao.findEmployeeLabel(employeeId);
+            Map<String, String> stringStringMap;
+            if (!CollectionUtils.isEmpty(employeeLabel)) {
+                sets = employeeLabel.get(0)
+                    .entrySet()
+                    .stream()
+                    .filter(entry -> Objects.equals(entry.getValue(), "Y"))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+            }
+            if (!CollectionUtils.isEmpty(sets)) {
+                if (falga) {
+                    byRoleColumnName = roleSignDao.findByRoleColumnName(new ArrayList<>(sets), "Y", null);
+                } else {
+                    byRoleColumnName = roleSignDao.findByRoleColumnName(new ArrayList<>(sets), "Y", "Y");
+                }
+                return byRoleColumnName.stream()
+                    .sorted(Comparator.comparingInt(RoleSignVO::getRoleOrder))
+                    .map(RoleSignVO::getRoleSignName)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            }
+        } catch (Exception exception) {
+            LogUtil.error("findEmployeeLabel error!", exception);
+        }
+        return sets;
+    }
+
+    @Override
+    @JalorOperation(code = "findByRoleSignName", desc = "根据人员标签名获取标签字段")
+    public ResultVo findByRoleSignName(RoleSignVO roleSignVO) {
+        ResultVo result = new ResultVo(false, "");
+        try {
+            if (roleSignVO == null) {
+                return result;
+            }
+            String roleSignName = roleSignVO.getRoleSignName();
+            if (StringUtil.isNullOrEmpty(roleSignName)) {
+                return result;
+            }
+            List<RoleSignVO> byRoleSignName = roleSignDao.findByRoleSignName(roleSignName);
+            if (byRoleSignName.size() > 0) {
+                result.setState(true);
+                result.setResult(byRoleSignName.get(0));
+            }
+            return result;
+        } catch (Exception exception) {
+            LogUtil.error("findByRoleSignName error!", exception);
+            result.setResult("error");
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @JalorOperation(code = "getConditionRole", desc = "获取所有过滤人员角色标签")
+    public List<RoleSignVO> getConditionRole() {
+        List<RoleSignVO> allRoleSignList = new ArrayList<>();
+        try {
+            allRoleSignList = roleSignDao.getConditionRole();
+        } catch (Exception exception) {
+            LogUtil.error("getAllRoleSignList error", exception);
+        }
+        return allRoleSignList;
+    }
+}
 
