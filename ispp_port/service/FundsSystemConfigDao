@@ -1,1 +1,43 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.dao.monitor;
+
+import com.huawei.it.occsafe.vo.monitor.FundsSystemVO;
+
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+
+/**
+ * 资金业务对象配置
+ *
+ * @author jwx1199302
+ * @since 2023/06/15
+ */
+public interface FundsSystemConfigDao {
+
+    /**
+     * 列表查询
+     */
+    List<FundsSystemVO> findFundsConfPageList(@Param("vo") FundsSystemVO fundsSystemVO);
+
+    /*
+    * 编辑
+    * */
+    void editItem(@Param("vos") List<FundsSystemVO> fundsSystemVOs);
+
+    /*
+     * 删除
+     * */
+    void deleteItem(@Param("vo") FundsSystemVO fundsSystemVO);
+
+    /*
+     * 添加
+     * */
+    void addItem(@Param("vos") List<FundsSystemVO> fundsSystemVOs);
+
+}
 
