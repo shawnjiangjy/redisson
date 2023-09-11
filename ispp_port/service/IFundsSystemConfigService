@@ -1,1 +1,62 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.monitor;
+
+import com.huawei.it.occsafe.vo.ResultVo;
+import com.huawei.it.occsafe.vo.monitor.FundsSystemVO;
+
+import java.util.List;
+
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+
+
+/**
+ * 资金应用业务对象配置
+ *
+ * @author jwx1199302
+ * @since 2023/6/15
+ */
+@Path("fundsSystemConfig")
+@Produces("application/json")
+public interface IFundsSystemConfigService {
+
+    /**
+     * 列表查询
+     *
+     * @param fundsSystemVO 参数
+     * @return 结果集
+     */
+    @POST
+    @Path("/findFundsConfPageList")
+    List<FundsSystemVO> findFundsConfPageList(FundsSystemVO fundsSystemVO);
+
+    /**
+     * 删除
+     * @param fundsSystemVO 参数
+     */
+    @POST
+    @Path("/deleteItem")
+    ResultVo<Object> deleteItem(FundsSystemVO fundsSystemVO);
+
+    /**
+     * 编辑
+     * @param fundsSystemVOs 参数
+     */
+    @POST
+    @Path("/editItem")
+    ResultVo<Object> editItem(List<FundsSystemVO> fundsSystemVOs);
+
+    /**
+     * 添加
+     * @param fundsSystemVOs 参数
+     */
+    @POST
+    @Path("/addItem")
+    ResultVo<Object> addItem(List<FundsSystemVO> fundsSystemVOs);
+
+}
 
