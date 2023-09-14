@@ -1,0 +1,269 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
+package com.huawei.it.jalor5.core.orm;
+
+import com.huawei.it.jalor5.core.base.DbPageBean;
+import com.huawei.it.jalor5.core.base.PageVO;
+import com.huawei.it.jalor5.core.base.PagedResult;
+import com.huawei.it.jalor5.core.log.ILogger;
+import com.huawei.it.jalor5.core.log.JalorLoggerFactory;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import org.apache.ibatis.executor.Executor;
+import org.apache.ibatis.executor.statement.StatementHandler;
+import org.apache.ibatis.logging.Log;
+import org.apache.ibatis.logging.LogFactory;
+import org.apache.ibatis.logging.jdbc.ConnectionLogger;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.plugin.Interceptor;
+import org.apache.ibatis.plugin.Intercepts;
+import org.apache.ibatis.plugin.Invocation;
+import org.apache.ibatis.plugin.Plugin;
+import org.apache.ibatis.plugin.Signature;
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.ResultHandler;
+import org.apache.ibatis.session.RowBounds;
+import org.springframework.util.Assert;
+
+@Intercepts({@Signature(
+    type = Executor.class,
+    method = "query",
+    args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class}
+)})
+public class PageInterceptor implements Interceptor {
+    private static final ILogger LOG = JalorLoggerFactory.getLogger(PageInterceptor.class);
+    private static final Log STATEMENT_LOG = LogFactory.getLog(PageInterceptor.class);
+    private static final int INDEX_MAPPED_STATEMENT = 0;
+    private static final int INDEX_PARAMETER = 1;
+    private static final int INDEX_ROW_BOUNDS = 2;
+    private static final int INDEX_RESULT_HANDLER = 3;
+    private static final int RESULT_MODE_ALL = 0;
+    private static final int RESULT_MODE_TOTALROWS = 1;
+    private static final int RESULT_MODE_DATASET = 2;
+    private static final String COUNT_SQL_POST_FIX = "Count";
+
+    public PageInterceptor() {
+    }
+
+    public Object intercept(Invocation invocation) throws Throwable {
+        Object[] queryArgs = invocation.getArgs();
+        MappedStatement mappedStatement = (MappedStatement)queryArgs[0];
+        String sqlId = mappedStatement.getId();
+        Object tempParameter = queryArgs[1];
+        PageVO pageVo = this.getIfExsit(queryArgs, tempParameter);
+        Object parameter = queryArgs[1];
+        DbPageBean dbBean = null;
+        dbBean = this.checkInvocation(sqlId, parameter);
+        if (null == dbBean) {
+            return invocation.proceed();
+        } else {
+            Executor executor = (Executor)invocation.getTarget();
+            if (dbBean.getResultMode() == 0 && dbBean.getTotalRows() == 0 || dbBean.getResultMode() == 1) {
+                this.queryCount(queryArgs, mappedStatement, sqlId, dbBean, executor);
+            }
+
+            List resultList = null;
+            if ((dbBean.getResultMode() != 0 || dbBean.getTotalRows() <= 0) && dbBean.getResultMode() != 2) {
+                resultList = this.getResultList(queryArgs, mappedStatement, pageVo, dbBean, executor);
+            } else {
+                resultList = this.queryResultList(executor, mappedStatement, queryArgs);
+                if (dbBean.getTotalRows() > 0 && pageVo != null) {
+                    pageVo.setTotalRows(dbBean.getTotalRows());
+                }
+            }
+
+            PagedResult pagedResult = new PagedResult();
+            pagedResult.setPageVO(this.transferPageVo(dbBean));
+            pagedResult.setResult(resultList);
+            List<PagedResult> returnResultList = new ArrayList();
+            returnResultList.add(pagedResult);
+            return returnResultList;
+        }
+    }
+
+    private List getResultList(Object[] queryArgs, MappedStatement mappedStatement, PageVO pageVo, DbPageBean dbBean, Executor executor) {
+        List resultList = null;
+        if (dbBean.getTotalRows() == 0) {
+            if ((dbBean.getResultMode() != 0 || dbBean.getTotalRows() != 0) && dbBean.getResultMode() != 1) {
+                resultList = this.queryResultList(executor, mappedStatement, queryArgs);
+                if (null == resultList) {
+                    resultList = Collections.EMPTY_LIST;
+                }
+
+                dbBean.setTotalRows(resultList.size());
+            } else {
+                resultList = Collections.EMPTY_LIST;
+            }
+
+            Assert.notNull(pageVo, "pageVo is null");
+            if (pageVo != null) {
+                pageVo.setTotalRows(resultList.size());
+            }
+        }
+
+        return resultList;
+    }
+
+    private PageVO getIfExsit(Object[] queryArgs, Object tempParameter) {
+        PageVO pageVo = null;
+        if (tempParameter instanceof Map) {
+            Map<Object, Object> parameterMap = (Map)tempParameter;
+            Iterator var5 = parameterMap.entrySet().iterator();
+
+            while(var5.hasNext()) {
+                Map.Entry<Object, Object> entry = (Map.Entry)var5.next();
+                if (entry.getValue() instanceof PageVO) {
+                    PageVO oldVo = (PageVO)entry.getValue();
+                    pageVo = oldVo;
+                    DbPageBean newVo = this.transferVo(oldVo);
+                    entry.setValue(newVo);
+                }
+            }
+        }
+
+        if (tempParameter instanceof PageVO) {
+            PageVO oldTempVo = (PageVO)tempParameter;
+            pageVo = oldTempVo;
+            DbPageBean newVo = this.transferVo(oldTempVo);
+            queryArgs[1] = newVo;
+        }
+
+        return pageVo;
+    }
+
+    private DbPageBean checkInvocation(String sqlId, Object parameter) {
+        if (null == parameter) {
+            return null;
+        } else {
+            return null != sqlId && !sqlId.endsWith("Count") ? this.findDbBean(parameter) : null;
+        }
+    }
+
+    private void queryCount(Object[] queryArgs, MappedStatement mappedStatement, String sqlId, DbPageBean dbbean, Executor executor) throws SQLException {
+        String queryCountSqlId = sqlId + "Count";
+        Configuration configuration = mappedStatement.getConfiguration();
+        MappedStatement queryCountMs = configuration.getMappedStatement(queryCountSqlId);
+        ProgramInterceptor programInterceptor = new ProgramInterceptor();
+        MappedStatement newStatement = programInterceptor.buildMappedStatement(queryCountMs);
+        List queryCountList = this.queryResultList(executor, newStatement, queryArgs);
+        int totalRows = Integer.parseInt(queryCountList.get(0).toString());
+        dbbean.setTotalRows(totalRows);
+    }
+
+    private List queryResultList(Executor executor, MappedStatement mappedStatement, Object[] queryArgs) {
+        Object parameter = queryArgs[1];
+        RowBounds rowBounds = (RowBounds)queryArgs[2];
+        ResultHandler resultHandler = (ResultHandler)queryArgs[3];
+        Configuration configuration = mappedStatement.getConfiguration();
+        BoundSql boundSql = mappedStatement.getBoundSql(parameter);
+        StatementHandler handler = configuration.newStatementHandler(executor, mappedStatement, parameter, rowBounds, resultHandler, boundSql);
+        Statement stmt = null;
+        List resultList = null;
+
+        List var12;
+        try {
+            stmt = this.prepareStatement(executor, handler);
+            resultList = handler.query(stmt, resultHandler);
+            var12 = resultList != null ? resultList : Collections.EMPTY_LIST;
+        } catch (SQLException var16) {
+            LOG.error(var16);
+            throw new RuntimeException("query resultList has sqlexception.");
+        } finally {
+            this.tryCloseStatement(stmt);
+        }
+
+        return var12;
+    }
+
+    private DbPageBean findDbBean(Object parameter) {
+        if (null == parameter) {
+            return null;
+        } else {
+            if (parameter instanceof Map) {
+                Map<Object, Object> parameterMap = (Map)parameter;
+                Iterator var3 = parameterMap.entrySet().iterator();
+
+                while(var3.hasNext()) {
+                    Map.Entry<Object, Object> entry = (Map.Entry)var3.next();
+                    if (entry.getValue() instanceof DbPageBean) {
+                        return (DbPageBean)entry.getValue();
+                    }
+                }
+            }
+
+            return parameter instanceof DbPageBean ? (DbPageBean)parameter : null;
+        }
+    }
+
+    private Statement prepareStatement(Executor executor, StatementHandler handler) throws SQLException {
+        Statement stmt = null;
+        Connection connection = ConnectionLogger.newInstance(executor.getTransaction().getConnection(), STATEMENT_LOG, 0);
+
+        try {
+            stmt = handler.prepare(connection, executor.getTransaction().getTimeout());
+            handler.parameterize(stmt);
+            return stmt;
+        } catch (SQLException var6) {
+            this.tryCloseStatement(stmt);
+            throw new RuntimeException("prepare statement has sqlexception.");
+        } catch (Exception var7) {
+            LOG.error(var7);
+            return stmt;
+        }
+    }
+
+    private void tryCloseStatement(Statement stmt) {
+        if (stmt != null) {
+            try {
+                stmt.close();
+            } catch (SQLException var3) {
+                LOG.error(var3);
+            }
+        }
+
+    }
+
+    public Object plugin(Object target) {
+        return Plugin.wrap(target, this);
+    }
+
+    public void setProperties(Properties arg0) {
+    }
+
+    private DbPageBean transferVo(PageVO page) {
+        DbPageBean bean = new DbPageBean();
+        bean.setCurPage(page.getCurPage());
+        bean.setPageSize(page.getPageSize());
+        bean.setStartIndex(page.getStartIndex());
+        bean.setEndIndex(page.getEndIndex());
+        bean.setFilterStr(page.getFilterStr());
+        bean.setFilters(page.getFilters());
+        bean.setOrderBy(page.getOrderBy());
+        bean.setTotalRows(page.getTotalRows());
+        bean.setResultMode(page.getResultMode());
+        return bean;
+    }
+
+    private PageVO transferPageVo(DbPageBean bean) {
+        PageVO page = new PageVO();
+        page.setCurPage(bean.getCurPage());
+        page.setPageSize(bean.getPageSize());
+        page.setFilterStr(bean.getFilterStr());
+        page.setFilters(bean.getFilters());
+        page.setOrderBy(bean.getOrderBy());
+        page.setTotalRows(bean.getTotalRows());
+        page.setResultMode(bean.getResultMode());
+        return page;
+    }
+}
