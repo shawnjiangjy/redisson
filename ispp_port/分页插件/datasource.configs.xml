@@ -1,1 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+  http://www.springframework.org/schema/beans/spring-beans.xsd
+  http://www.springframework.org/schema/aop 
+  http://www.springframework.org/schema/aop/spring-aop.xsd
+  http://www.springframework.org/schema/tx 
+  http://www.springframework.org/schema/tx/spring-tx.xsd"
+       default-lazy-init="true">
+
+    <beans profile="dev">
+        <bean id="wasDataSource"
+              class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+            <property name="driverClassName" value="${datasource.jdbcDriverClass.1}"/>
+            <property name="url" value="${datasource.url.1}"/>
+            <property name="username" value="${datasource.user.1}"/>
+            <property name="password" value="${datasource.password.1}"/>
+        </bean>
+        <bean id="txManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+            <property name="dataSource" ref="wasDataSource"/>
+        </bean>
+    </beans>
+
+    <beans profile="sit,uat,production">
+        <bean id="wasDataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close" primary="true">
+            <property name="driverClassName" value="${datasource.jdbcDriverClass.1}"/>
+            <property name="url" value="${datasource.url.1}"/>
+            <property name="username" value="${datasource.user.1}"/>
+            <property name="password" value="${datasource.password.1}"/>
+            <property name="maxActive" value="${datasource.maxActive.1}"/>
+            <property name="maxIdle" value="${datasource.maxIdle.1}"/>
+            <property name="minIdle" value="${datasource.minIdle.1}"/>
+            <property name="maxWait" value="${datasource.maxWaitMillis.1}"/>
+            <property name="removeAbandoned" value="${datasource.removeAbandoned.1}"/>
+            <property name="removeAbandonedTimeout" value="${datasource.removeAbandonedTimeout.1}"/>
+            <property name="testWhileIdle" value="true"/>
+            <property name="validationQuery" value="select 1 from dual"/>
+            <property name="validationQueryTimeout" value="20"/>
+            <property name="timeBetweenEvictionRunsMillis" value="${datasource.timeBetweenEvictionRunsMillis.1}"/>
+            <property name="connectionProperties">
+                <value>clientEncoding=utf-8</value>
+            </property>
+        </bean>
+
+        <bean id="txManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+            <property name="dataSource" ref="wasDataSource"/>
+        </bean>
+    </beans>
+    <!-- transaction manager, use JtaTransactionManager for global tx -->
+    <beans>
+        <tx:annotation-driven transaction-manager="txManager" proxy-target-class="false"/>
+        <alias name="txManager" alias="transactionManager"/>
+        <!-- the transactional advice -->
+        <tx:advice id="txAdvice" transaction-manager="txManager">
+            <tx:attributes>
+                <tx:method name="find*" read-only="true" propagation="SUPPORTS"/>
+                <tx:method name="check*" read-only="true" propagation="SUPPORTS"/>
+                <tx:method name="setSelf" read-only="true" propagation="SUPPORTS"/>
+                <!-- 定义所有异常均回滚事务 -->
+                <tx:method name="*" propagation="REQUIRED" read-only="false" timeout="120"
+                           rollback-for="java.lang.Exception"/>
+            </tx:attributes>
+        </tx:advice>
+        <!-- ensure that the above transactional advice runs for any execution
+          of an operation defined by the Service interface -->
+        <aop:config>
+            <aop:pointcut id="transationMethod"
+                          expression="execution(* com.huawei.it..*Service.*(..)) and !@annotation(com.huawei.it.jalor5.core.annotation.NoJalorTransation)"/>
+            <aop:advisor order="100" advice-ref="txAdvice" pointcut-ref="transationMethod"/>
+        </aop:config>
+        <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+            <property name="configuration">
+                <bean class="org.apache.ibatis.session.Configuration">
+                    <property name="useActualParamName" value="false"/>
+                </bean>
+            </property>
+            <property name="dataSource" ref="wasDataSource"/>
+            <property name="plugins">
+                <list>
+                    <bean id="pagePlugin" class="com.huawei.it.jalor5.core.orm.PageInterceptor"/>
+                    <bean id="jalorResultSetPlugin" class="com.huawei.it.jalor5.core.orm.JalorResultSetInterceptor"/>
+                    <bean id="programPlugin" class="com.huawei.it.jalor5.core.orm.ProgramInterceptor"/>
+                    <bean id="iEmployeeRecordDaoPlugin" class="com.huawei.it.occsafe.service.impl.qualifications.proxy.IEmployeeRecordDaoIntercept"/>
+                </list>
+            </property>
+            <property name="mapperLocations" value="classpath*:com/huawei/it/**/*Dao.mysql.xml"/>
+        </bean>
+        <!-- 连数据库Dao自动mapping, 从jalor5.core.beans配置移到这里    -->
+        <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+            <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+            <property name="basePackage" value="com.huawei.it.**.dao"/>
+        </bean>
+    </beans>
+</beans>
+
 
