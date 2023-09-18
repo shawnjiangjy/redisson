@@ -1,0 +1,134 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
+package com.huawei.it.jalor5.core.request.impl;
+
+import com.huawei.it.jalor5.core.request.IApplicationPrincipal;
+import com.huawei.it.jalor5.core.request.IRequestContext;
+import com.huawei.it.jalor5.core.request.IUserPrincipal;
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+
+public final class RequestContext implements IRequestContext {
+    private static final long serialVersionUID = 5296206775558799330L;
+    private String userLanguage;
+    private IApplicationPrincipal application;
+    private IUserPrincipal user;
+    private Map<String, Object> items = new HashMap();
+    private Map<String, Serializable> session = new HashMap();
+    private boolean isSkipSecurityCheck;
+    private boolean debugEnabled;
+    private String sessionId;
+    private String tenantId;
+    private String userIp;
+
+    public RequestContext() {
+    }
+
+    public String getSessionId() {
+        return this.sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public boolean isDebugEnabled() {
+        return this.debugEnabled;
+    }
+
+    public void setDebugEnabled(boolean debugEnabled) {
+        this.debugEnabled = debugEnabled;
+    }
+
+    public IApplicationPrincipal getApplication() {
+        return this.application;
+    }
+
+    public void setApplication(IApplicationPrincipal application) {
+        this.application = application;
+    }
+
+    public Map<String, Object> getItems() {
+        return this.items;
+    }
+
+    public void setItems(Map<String, Object> items) {
+        this.items = items;
+    }
+
+    public IUserPrincipal getUser() {
+        return this.user;
+    }
+
+    public void setUser(IUserPrincipal user) {
+        this.user = user;
+    }
+
+    public String getUserIp() {
+        return this.userIp;
+    }
+
+    public void setUserIp(String userIp) {
+        this.userIp = userIp;
+    }
+
+    public String getUserLanguage() {
+        return this.userLanguage;
+    }
+
+    public void setUserLanguage(String userLanguage) {
+        this.userLanguage = userLanguage;
+    }
+
+    public Object getItem(String key) {
+        return this.items.get(key);
+    }
+
+    public void setItem(String key, Object value) {
+        this.items.put(key, value);
+    }
+
+    public static IRequestContext getCurrent() {
+        return RequestContextManager.getCurrent(false);
+    }
+
+    public static IRequestContext getCurrent(boolean allowNull) {
+        return RequestContextManager.getCurrent(allowNull);
+    }
+
+    public Map<String, Serializable> getSession() {
+        return this.session;
+    }
+
+    public void setSession(Map<String, Serializable> session) {
+        this.session = session;
+    }
+
+    public Serializable getSessionItem(String key) {
+        return (Serializable)this.session.get(key);
+    }
+
+    public void setSessionItem(String key, Serializable value) {
+        this.session.put(key, value);
+    }
+
+    public boolean isSkipSecurityCheck() {
+        return this.isSkipSecurityCheck;
+    }
+
+    public void setSkipSecurityCheck(boolean isSkipSecurityCheck) {
+        this.isSkipSecurityCheck = isSkipSecurityCheck;
+    }
+
+    public String getTenantId() {
+        return this.tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+}
