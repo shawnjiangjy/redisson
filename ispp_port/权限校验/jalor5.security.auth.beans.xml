@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:jalor="http://www.huawei.com/it/schema/jalor"
+	xsi:schemaLocation="
+	 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+     http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.1.xsd
+     http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-3.1.xsd
+	 http://www.huawei.com/it/schema/jalor http://www.huawei.com/it/schemas/jalor-beans.xsd">
+	
+
+	<aop:config>
+		<aop:advisor advice-ref="securityInterceptor" order="50"
+			pointcut="(execution(@com.huawei.it.jalor5.core.annotation.JalorOperation * com.huawei..*.*(..) ))
+			or (execution(@com.huawei.it.jalor5.core.annotation.JalorOperation * ${jalor.authorization.scope:com.huawei..*.*(..)} ))"/>
+	</aop:config>
+	
+	<bean id="securityInterceptor" 
+		class="com.huawei.it.jalor5.security.service.impl.internal.SecurityInterceptor">
+	</bean>
+	
+	<bean id="serviceOperationFinder" class="com.huawei.it.jalor5.security.service.impl.internal.ServiceOperationFinder">
+		<property name="basePackage" value="${jalor.operation.scan.basePackages:}"/>
+	</bean>
+	
+	<bean id="serviceCheckSecurityFinder" class="com.huawei.it.jalor5.security.service.impl.internal.ServiceCheckSecurityFinder">
+		<property name="basePackage" value="${jalor.operation.scan.basePackages:}"/>
+	</bean> 
+	
+</beans>
