@@ -1,0 +1,211 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
+package com.huawei.it.jalor5.web.support.internal.impl;
+
+import com.huawei.it.jalor5.core.cache.GlobalParameters;
+import com.huawei.it.jalor5.core.config.ApplicationConfigProperties;
+import com.huawei.it.jalor5.core.log.ILogger;
+import com.huawei.it.jalor5.core.log.JalorLoggerFactory;
+import com.huawei.it.jalor5.core.request.impl.RequestContext;
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.jalor5.lang.JalorLang;
+import java.util.Enumeration;
+import java.util.Locale;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+public final class RequestLangUtil {
+    public static final String LANGUAGE_SWITCH = "LanguageSwitch";
+    private static final String[] LANG_ARR = new String[]{"en", "zh"};
+    private static final ILogger LOGGER = JalorLoggerFactory.getLogger(RequestLangUtil.class);
+    private static final String JALOR_LANG = "JALOR5_LANG";
+    private static final String LANG_COOKIE = "lang";
+
+    private RequestLangUtil() {
+    }
+
+    public static String getUserLang(HttpServletRequest request) {
+        if (isFromCookie()) {
+            return getLangFromCookie(request);
+        } else {
+            String lang;
+            if (!isSwitchEnabled()) {
+                lang = getDefaultLang();
+                return !StringUtil.isNullOrEmpty(lang) ? lang : "en_US";
+            } else if (null == request) {
+                return "en_US";
+            } else {
+                lang = getLangFromParam(request);
+                if (!StringUtil.isNullOrEmpty(lang)) {
+                    setLang2Session(request, lang);
+                    return lang;
+                } else {
+                    lang = getLangFromSession(request);
+                    if (!StringUtil.isNullOrEmpty(lang)) {
+                        return lang;
+                    } else {
+                        lang = getDefaultLang();
+                        if (!StringUtil.isNullOrEmpty(lang)) {
+                            return lang;
+                        } else {
+                            lang = getLangFromBrowser(request);
+                            if (!StringUtil.isNullOrEmpty(lang)) {
+                                setLang2Session(request, lang);
+                                return lang;
+                            } else {
+                                return "en_US";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static boolean isSwitchEnabled() {
+        return GlobalParameters.isValueTrue("LanguageSwitch");
+    }
+
+    private static String getLangFromBrowser(HttpServletRequest request) {
+        Enumeration<Locale> locales = request.getLocales();
+
+        String lang;
+        do {
+            if (!locales.hasMoreElements()) {
+                return "en_US";
+            }
+
+            Locale locale = (Locale)locales.nextElement();
+            lang = locale.getLanguage() + "_" + locale.getCountry();
+        } while(!isValidLang(lang));
+
+        LOGGER.debug("Locale got from browser: {0}", new Object[]{lang});
+        return lang;
+    }
+
+    private static String getLangFromParam(HttpServletRequest request) {
+        String lang = request.getParameter("locale");
+        return !StringUtil.isNullOrEmpty(lang) && isValidLang(lang) ? lang : null;
+    }
+
+    private static void setLang2Session(HttpServletRequest request, String lang) {
+        if (isValidLang(lang)) {
+            RequestUtil.setSessionValue(request, "JALOR5_LANG", lang);
+        }
+    }
+
+    public static void setLang2Session(String lang) {
+        if (isValidLang(lang)) {
+            RequestContext request = (RequestContext)RequestContext.getCurrent();
+            request.getSession().put("JALOR5_LANG", lang);
+            request.setUserLanguage(lang);
+        }
+    }
+
+    public static boolean isValidLang(String lang) {
+        String[] langs = getValidLanguages();
+        String[] var2 = langs;
+        int var3 = langs.length;
+
+        for(int var4 = 0; var4 < var3; ++var4) {
+            String validLang = var2[var4];
+            if (lang.equalsIgnoreCase(validLang)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static String[] getValidLanguages() {
+        return GlobalParameters.get("ValidLanguages", "en_US,zh_CN").split(",");
+    }
+
+    private static String getDefaultLang() {
+        return GlobalParameters.get("DefaultLanguage", "");
+    }
+
+    private static String getLangFromSession(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return null;
+        } else {
+            Object sessionLang = session.getAttribute("JALOR5_LANG");
+            return sessionLang != null ? (String)sessionLang : null;
+        }
+    }
+
+    public static void swithTo(HttpServletRequest request, HttpServletResponse response, String lang) {
+        setLang2Session(request, lang);
+    }
+
+    public static boolean isFromCookie() {
+        String cookieEnabled = ApplicationConfigProperties.getContextProperty("jalor.lang.cookie.enabled");
+        return cookieEnabled != null && cookieEnabled.equalsIgnoreCase("true");
+    }
+
+    private static String getLangFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        String lang = "";
+        if (cookies != null) {
+            Cookie[] var3 = cookies;
+            int var4 = cookies.length;
+
+            for(int var5 = 0; var5 < var4; ++var5) {
+                Cookie cookie = var3[var5];
+                if ("lang".equals(cookie.getName())) {
+                    lang = formatLang(cookie.getValue().trim());
+                    break;
+                }
+            }
+        }
+
+        if (StringUtil.isNullOrEmpty(lang)) {
+            lang = getDefaultLang();
+        }
+
+        return StringUtil.isNullOrEmpty(lang) ? "en_US" : lang;
+    }
+
+    private static String formatLang(String lang) {
+        String jalorLang = null;
+        String[] var2 = LANG_ARR;
+        int var3 = var2.length;
+
+        for(int var4 = 0; var4 < var3; ++var4) {
+            String str = var2[var4];
+            if (str.equals(lang)) {
+                jalorLang = JalorLang.valueOf(lang.toUpperCase(Locale.ROOT)).getLang();
+                break;
+            }
+        }
+
+        if (StringUtil.isNullOrEmpty(jalorLang)) {
+            String setLang = ApplicationConfigProperties.getContextProperty("jalor.lang." + lang);
+            if (!StringUtil.isNullOrEmpty(setLang) && isValidLang(setLang)) {
+                jalorLang = setLang;
+            }
+        }
+
+        return StringUtil.isNullOrEmpty(jalorLang) ? JalorLang.EN.getLang() : jalorLang;
+    }
+
+    public static void addCookie(HttpServletResponse response, HttpServletRequest request, String lang) {
+        if (lang.indexOf("_") != -1) {
+            String[] arr = lang.split("_");
+            lang = arr[0].toLowerCase(Locale.ROOT);
+            Cookie langCookie = new Cookie("lang", lang);
+            langCookie.setPath("/");
+            String domain = DomainResolver.getCurrentDomain();
+            langCookie.setDomain(domain);
+            langCookie.setMaxAge(2592000);
+            response.addCookie(langCookie);
+        }
+
+    }
+}
