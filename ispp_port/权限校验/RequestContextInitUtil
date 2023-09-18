@@ -1,0 +1,256 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
+package com.huawei.it.jalor5.web.support.internal.impl;
+
+import com.huawei.his.jalor.traces.TraceManager;
+import com.huawei.it.jalor5.core.config.ApplicationConfigProperties;
+import com.huawei.it.jalor5.core.request.IRequestContext;
+import com.huawei.it.jalor5.core.request.impl.Application;
+import com.huawei.it.jalor5.core.request.impl.RequestContext;
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.jalor5.web.support.SessionMap;
+import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.util.Map;
+import java.util.UUID;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class RequestContextInitUtil {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RequestContextInitUtil.class);
+
+    private RequestContextInitUtil() {
+    }
+
+    public static IRequestContext buildBasicContext(HttpServletRequest request) {
+        RequestContext requestContext = new RequestContext();
+        processTenant(request, requestContext);
+        processSession(request, requestContext);
+        processApplication(requestContext);
+        processLanguage(request, requestContext);
+        processIp(request, requestContext);
+        processAppIdInfos(request, requestContext);
+        processDomain(request, requestContext);
+        processOthers(request, requestContext);
+        processTrace(request, requestContext);
+        processAlbGray(request, requestContext);
+        processJwtToken(request, requestContext);
+        return requestContext;
+    }
+
+    private static void processDomain(HttpServletRequest request, RequestContext requestContext) {
+        String domain = DomainResolver.getCurrentDomain(request);
+        if (!StringUtil.isNullOrEmpty(domain)) {
+            requestContext.setItem("CURRENT_DOMAIN", domain);
+        }
+
+    }
+
+    private static void processTenant(HttpServletRequest request, RequestContext requestContext) {
+        String tenantId = request.getHeader("his-tenantId");
+        if (!StringUtil.isNullOrEmpty(tenantId)) {
+            LOGGER.debug("Found the on-cloud TenantId:{} from Request Header, then put int RequestContext ", tenantId);
+            requestContext.setTenantId(tenantId);
+        }
+
+    }
+
+    private static void processAppIdInfos(HttpServletRequest request, RequestContext requestContext) {
+        String appId = request.getHeader("x-appId");
+        String subAppid = request.getHeader("x-subAppId");
+        if (!StringUtil.isNullOrEmpty(appId)) {
+            requestContext.setItem("x-appId", appId);
+        }
+
+        if (!StringUtil.isNullOrEmpty(subAppid)) {
+            requestContext.setItem("x-subAppId", subAppid);
+        }
+
+    }
+
+    private static void processOthers(HttpServletRequest request, RequestContext requestContext) {
+        requestContext.setItem("JalorRequestURI", RequestUtil.getShortUri(request));
+        requestContext.setItem("JalorRequestType", request.getAttribute("JalorRequestType"));
+        requestContext.setItem("JalorCookiesType", RequestUtil.getCookies(request));
+        String internalToken = request.getHeader("JalorInternalToken");
+        if (!StringUtil.isNullOrEmpty(internalToken)) {
+            requestContext.setItem("JalorInternalToken", internalToken);
+        }
+
+        Map jalorHeaderMap = RequestUtil.getJalorHeaderInfos(request);
+        requestContext.setItem("x-jalor-", jalorHeaderMap);
+        String requestId = request.getHeader("X-Request-Id");
+        if (!StringUtil.isNullOrEmpty(requestId)) {
+            requestContext.setItem("xRequestId", requestId);
+        }
+
+    }
+
+    private static void processTrace(HttpServletRequest request, RequestContext requestContext) {
+        String headerStr = request.getHeader("systemHeaderConstants");
+        String spanId = request.getHeader("SpanID");
+        String parentSpanId = request.getHeader("ParentSpanID");
+        String xHisUemTraceid = request.getHeader("x-his-uem-traceid");
+        String traceId = TraceManager.getInstance().getTraceId(request);
+        if (StringUtil.isNullOrEmpty(traceId)) {
+            traceId = request.getHeader("TraceID");
+        }
+
+        if (StringUtil.isNullOrEmpty(traceId)) {
+            traceId = request.getHeader("x-tracerid");
+            if (StringUtil.isNullOrEmpty(traceId)) {
+                traceId = UUID.randomUUID().toString().trim().replace("-", "");
+            }
+        }
+
+        if (StringUtil.isNullOrEmpty(spanId)) {
+            spanId = request.getHeader("x-spanid");
+        }
+
+        try {
+            if (!StringUtil.isNullOrEmpty(headerStr)) {
+                requestContext.setItem("JalorRequestHeader", URLDecoder.decode(headerStr, "UTF-8"));
+            }
+
+            if (!StringUtil.isNullOrEmpty(spanId)) {
+                requestContext.setItem("SpanID", URLDecoder.decode(spanId, "UTF-8"));
+            }
+
+            if (!StringUtil.isNullOrEmpty(parentSpanId)) {
+                requestContext.setItem("ParentSpanID", URLDecoder.decode(parentSpanId, "UTF-8"));
+            }
+
+            if (!StringUtil.isNullOrEmpty(xHisUemTraceid)) {
+                requestContext.setItem("x-his-uem-traceid", URLDecoder.decode(xHisUemTraceid, "UTF-8"));
+            }
+
+            requestContext.setItem("TraceID", traceId);
+        } catch (UnsupportedEncodingException var8) {
+            requestContext.setItem("JalorRequestHeader", headerStr);
+            requestContext.setItem("SpanID", spanId);
+            requestContext.setItem("ParentSpanID", parentSpanId);
+            requestContext.setItem("x-his-uem-traceid", xHisUemTraceid);
+            requestContext.setItem("TraceID", traceId);
+        }
+
+    }
+
+    private static void processAlbGray(HttpServletRequest request, RequestContext requestContext) {
+        String albGray = request.getHeader("x-alb-gray");
+        if (!StringUtil.isNullOrEmpty(albGray)) {
+            requestContext.setItem("x-alb-gray", albGray);
+        }
+
+        String albGrayService = request.getHeader("x-alb-gray-services");
+        if (!StringUtil.isNullOrEmpty(albGrayService)) {
+            requestContext.setItem("x-alb-gray-services", albGrayService);
+        }
+
+    }
+
+    private static void processJwtToken(HttpServletRequest request, RequestContext requestContext) {
+        String jwtGwToken = request.getHeader("x-jwt-gw-token");
+        if (!StringUtil.isNullOrEmpty(jwtGwToken)) {
+            requestContext.setItem("x-jwt-gw-token", jwtGwToken);
+        }
+
+        String jwtMsToken = request.getHeader("x-jwt-ms-token");
+        if (!StringUtil.isNullOrEmpty(jwtMsToken)) {
+            requestContext.setItem("x-jwt-ms-token", jwtMsToken);
+        }
+
+    }
+
+    private static void processIp(HttpServletRequest request, RequestContext requestContext) {
+        String clientIP = request.getRemoteAddr();
+        String realIP = RequestUtil.getRealIP(request);
+        if (StringUtil.isNullOrEmpty(realIP)) {
+            requestContext.setUserIp(clientIP);
+        } else {
+            requestContext.setUserIp(realIP);
+        }
+
+    }
+
+    public static void processLanguage(HttpServletRequest request, RequestContext requestContext) {
+        String userLanguage = RequestLangUtil.getUserLang(request);
+        requestContext.setUserLanguage(userLanguage);
+    }
+
+    private static void processApplication(RequestContext requestContext) {
+        requestContext.setApplication(Application.getCurrent());
+    }
+
+    public static void processSession(HttpServletRequest request, RequestContext requestContext) {
+        SessionMap<String, Serializable> sessionMap = new SessionMap(request);
+        requestContext.setSession(sessionMap);
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            requestContext.setSessionId(session.getId());
+        }
+    }
+
+    public static String getIgnoreSecurityCheck(HttpServletRequest request) {
+        return request.getHeader("x-ignore-auth");
+    }
+
+    public static String getMultiConsumerAppid(HttpServletRequest request) {
+        String multiConsumerAppid = request.getHeader("x-tenantId");
+        if (StringUtil.isNullOrEmpty(multiConsumerAppid)) {
+            multiConsumerAppid = request.getHeader("x-multi-consumer-appid");
+            if (StringUtil.isNullOrEmpty(multiConsumerAppid)) {
+                multiConsumerAppid = request.getHeader("multi-consumer-appid");
+            }
+        }
+
+        if (StringUtil.isNullOrEmpty(multiConsumerAppid)) {
+            multiConsumerAppid = request.getParameter("x-tenantId");
+            if (StringUtil.isNullOrEmpty(multiConsumerAppid)) {
+                multiConsumerAppid = request.getParameter("x-multi-consumer-appid");
+            }
+        }
+
+        return multiConsumerAppid;
+    }
+
+    public static String getMultiAppid(HttpServletRequest request) {
+        String appId = request.getHeader("x-appId");
+        if (StringUtil.isNullOrEmpty(appId)) {
+            appId = request.getHeader("x-app-id");
+        }
+
+        if (StringUtil.isNullOrEmpty(appId)) {
+            appId = request.getParameter("x-appId");
+            if (StringUtil.isNullOrEmpty(appId)) {
+                appId = request.getParameter("x-app-id");
+            }
+        }
+
+        return appId;
+    }
+
+    public static String getMultiSubAppid(HttpServletRequest request) {
+        String subAppId = request.getHeader("x-subAppId");
+        if (StringUtil.isNullOrEmpty(subAppId)) {
+            subAppId = request.getHeader("x-sub-app-id");
+        }
+
+        if (StringUtil.isNullOrEmpty(subAppId)) {
+            subAppId = request.getParameter("x-subAppId");
+            if (StringUtil.isNullOrEmpty(subAppId)) {
+                subAppId = request.getParameter("x-sub-app-id");
+            }
+        }
+
+        String configAppid = ApplicationConfigProperties.getContextProperty("application.appId");
+        String configSubAppid = ApplicationConfigProperties.getContextProperty("application.subAppId");
+        String multiAppid = getMultiAppid(request);
+        return configAppid.equalsIgnoreCase(multiAppid) && configSubAppid.equalsIgnoreCase(subAppId) ? null : subAppId;
+    }
+}
