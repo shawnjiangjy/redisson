@@ -4,4 +4,5 @@
    RequestLangUtil：获取请求语言工具类
    RequestUtil：获取ip
    DomainResolver：获取域名
+   RequestContextManager：持有线程本地变量，将每个线程的请求信息隔离
 
