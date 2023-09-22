@@ -1,0 +1,57 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.aspect;
+
+import com.huawei.it.occsafe.annotation.ThrowingHandle;
+import com.huawei.it.occsafe.vo.ResultVo;
+
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.Signature;
+import org.aspectj.lang.annotation.AfterThrowing;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Pointcut;
+
+import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint;
+import org.springframework.stereotype.Component;
+
+import java.lang.reflect.Method;
+
+/**
+ * @author jwx1199302
+ * @description 资质查询接口的切面，限制接口访问时间以及 日志记录
+ * @since 2020/11/9 14:37
+ */
+@Aspect
+@Component
+public class ThrowingHandleAspect {
+
+    /**
+     * controllerList aspect
+     */
+    @Pointcut("@annotation(com.huawei.it.occsafe.annotation.ThrowingHandle)")
+    public void ThrowingHandle() {
+    }
+
+
+    /**
+     * doAround
+     *
+     * @param joinPoint 织入点
+     * @return 返回值
+     * @throws Throwable 异常信息
+     */
+    @AfterThrowing("ThrowingHandle()")
+    public Object doAfterThrowing(JoinPoint joinPoint) {
+        MethodInvocationProceedingJoinPoint mj = (MethodInvocationProceedingJoinPoint) joinPoint;
+        MethodSignature signature = (MethodSignature)mj.getSignature();
+        Method method = signature.getMethod();
+        ThrowingHandle annotation = method.getAnnotation(ThrowingHandle.class);
+        String message = annotation.message();
+        System.out.println(message);
+        return new ResultVo(false, "", message);
+    }
+}
