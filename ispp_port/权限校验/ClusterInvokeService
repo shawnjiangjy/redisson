@@ -1,7 +1,7 @@
 //
 // Source code recreated from a .class file by IntelliJ IDEA
 // (powered by FernFlower decompiler)
-//  invokeServer() 方法封装了httpclient请求
+//  invokeServer() 方法封装了httpclient请求 
 
 package com.huawei.it.jalor5.web.support.service.impl;
 
