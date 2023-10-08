@@ -1,0 +1,96 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2021-2022. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.alibaba.fastjson.JSON;
+
+import com.huawei.it.occsafe.common.AnonymizeUtils;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponse;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponseWrap;
+import com.huawei.it.occsafe.service.qualifications.IQualificationPlan;
+import com.huawei.it.occsafe.service.qualifications.IQualificationQuery;
+import com.huawei.it.occsafe.service.qualifications.validate.IQualificationParamsValidator;
+import com.huawei.it.occsafe.service.qualifications.validate.IQualificationRequestValidator;
+import com.huawei.it.occsafe.util.LogUtil;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.ResponseEntity;
+
+import javax.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * @author pWX814460
+ * @description qualification执行计划抽象
+ * @since 2020/11/3 10:59
+ */
+public abstract class AbstractQualificationPlan implements IQualificationPlan {
+
+    @Inject
+    @Qualifier("qualificationParamsValidator")
+    private IQualificationParamsValidator qualificationParamsValidator;
+
+    @Inject
+    @Qualifier("allowQueryValidator")
+    private IQualificationRequestValidator allowQueryValidator;
+
+    @Override
+    public abstract ResponseEntity qualification(String params);
+
+    protected QualificationsResponseWrap readyAndQuery(String requestArg, IQualificationQuery qualificationQuery) {
+        List<QualificationsResponse> response = new ArrayList<>();
+        List<QualificationsResponse> validates = qualificationParamsValidator.validate(requestArg, allowQueryValidator);
+        QualificationsRequest request = null;
+        try {
+            request = JSON.parseObject(requestArg, QualificationsRequest.class);
+        } catch (Exception exception) {
+            LogUtil.warn("invalid requestArg");
+        }
+        if (request != null) {
+            String[] split = request.getW3account().split(",");
+            List<String> workNoList = new ArrayList<>();
+            List<String> w3AccountList = new ArrayList<>(Arrays.asList(split));
+            for (String strValue : split) {
+                workNoList.add(AnonymizeUtils.getEmployee(strValue));
+            }
+            // 根据W3account输入信息，分割获取所有输入的工号和w3账号
+            request.setOriginWorkNoList(workNoList);
+            request.setW3AccountList(w3AccountList);
+            initAccountHolder(request, w3AccountList);
+        }
+        if (validates != null) {
+            response.addAll(validates);
+            return new QualificationsResponseWrap(response, request, new HashMap<>());
+        }
+        // 能到这一步说明request不可能为null，(不合法工号过滤，黑名单过滤，异动人员过滤，新工号过滤，)
+        return qualificationQuery.query(request);
+    }
+
+    protected boolean reject(QualificationsResponseWrap qrw) {
+        if (qrw == null) {
+            return true;
+        }
+        if (qrw.getRequest() == null) {
+            return true;
+        }
+        return false;
+    }
+
+    private Map<String, String> initAccountHolder(QualificationsRequest request, List<String> splitList) {
+        Map<String, String> accountHolder = request.getAccountHolder();
+        splitList.stream().forEach(item -> {
+            String lowerItem = item.toLowerCase(Locale.ROOT);
+            accountHolder.put(AnonymizeUtils.getEmployee(item), lowerItem);
+        });
+        return accountHolder;
+    }
+}
