@@ -1,0 +1,407 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2022. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.huawei.it.jalor5.core.annotation.JalorOperation;
+import com.huawei.it.jalor5.core.annotation.SecurityPolicy;
+import com.huawei.it.jalor5.core.cache.GlobalParameters;
+import com.huawei.it.jalor5.core.exception.ApplicationException;
+import com.huawei.it.jalor5.core.request.IRequestContextHolder;
+import com.huawei.it.jalor5.core.request.impl.RequestContext;
+import com.huawei.it.jalor5.core.util.CollectionUtil;
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.jalor5.i18n.service.II18nQueryService;
+import com.huawei.it.occsafe.annotation.LimitTimeRequest;
+import com.huawei.it.occsafe.common.AnonymizeUtils;
+import com.huawei.it.occsafe.dao.escalate.IEscalateDao;
+import com.huawei.it.occsafe.dao.qualification.ITrustListDao;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.Account;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationContext;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationTip;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponse;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponseWrap;
+import com.huawei.it.occsafe.service.impl.qualifications.config.QualificationConfig;
+import com.huawei.it.occsafe.service.impl.qualifications.config.QualificationExecutorRuleConfig;
+import com.huawei.it.occsafe.service.impl.qualifications.filter.FilterRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.filter.QualificationFilterChain;
+import com.huawei.it.occsafe.service.qualifications.IQualificationAfter;
+import com.huawei.it.occsafe.service.qualifications.IQualificationBefore;
+import com.huawei.it.occsafe.service.qualifications.IQualificationQuery;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.vo.escalate.EscalateVO;
+
+import com.sun.corba.se.spi.ior.ObjectKey;
+import org.apache.commons.collections.CollectionUtils;
+import org.springframework.context.annotation.Lazy;
+
+import javax.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * @author pWX814460
+ * @description AbstractQualificationQuery
+ * @since 2020/11/3 14:39
+ */
+public abstract class AbstractQualificationQuery implements IQualificationQuery {
+
+
+    private static final String BLACK_LIST_WORKNO = "10";
+
+    private static final String INVALID_WORKNO = "9";
+
+    private static final String NEW_MEMBER = "6";
+
+    private static final String INVALID_WORKNO_MSG = "工号不合法";
+
+    private static final String NEW_MEMBER_MSG = "业务放行";
+
+    private static final String CATAGRAY_OTH = "OTH";
+
+    private static final String CATAGRAY_EX_OTH = "EX_OTH";
+
+    /**
+     * 加载qualificationBefore
+     *
+     * @return 加载的结果
+     */
+    protected abstract IQualificationBefore loadQualificationBefore();
+
+    /**
+     * 加载qualificationBefore
+     *
+     * @return 加载的结果
+     */
+    protected abstract IQualificationAfter loadQualificationAfter();
+
+    @Inject
+    private QualificationFilterChain qualificationFilterChain;
+
+    @Inject
+    private IEscalateDao escalateDao;
+
+    @Inject
+    private ITrustListDao trustListDao;
+
+    @Inject
+    private II18nQueryService i18nQueryService;
+
+    @Inject
+    @Lazy
+    private IRequestContextHolder requestContextHolder;
+
+    @LimitTimeRequest
+    @Override
+    @JalorOperation(
+            policy = SecurityPolicy.AllSystemUser
+    )
+    public QualificationsResponseWrap query(QualificationsRequest request) {
+        String BlackListWorkNoMsg = "";
+        try {
+            // 设置虚拟登录免鉴权
+            String userAccount = GlobalParameters.get("ISchedulerVirutalUser","ischeduler");
+            requestContextHolder.begin(userAccount);
+            // 根据上下文获取当前语言
+            String lang = RequestContext.getCurrent().getUserLanguage();
+            Map<String, Object> map = i18nQueryService.findI18nMap("",lang);
+            BlackListWorkNoMsg = (String)map.get("jalor.cms.comment.blackListWorknoMsg");
+        } catch (ApplicationException e) {
+            e.printStackTrace();
+        }
+        for (int filterLevel = 1; filterLevel < 4; filterLevel++) {
+            qualificationFilterChain.filter(new FilterRequest(request, filterLevel));
+        }
+        List<QualificationsResponse> respones = new ArrayList<>();
+        List<String> workNoList = request.getOriginWorkNoList();
+        if (CollectionUtils.isNotEmpty(workNoList)) {
+            request.setWorkNoList(workNoList);
+            // 根据请求参数获取对外资质查询上下文
+            QualificationContext qualificationContext = loadQualificationBefore().checkScenario(request);
+            // 执行上下文获取资质接口
+            respones = qualificationContext.run();
+        }
+        Map<String, Object> resultMap = getTipMap(respones, request);
+        Map<String, String> tipMap = (Map<String, String>)resultMap.get("tipMap");
+        PriorityQueue<QualificationTip> tipQueue = (PriorityQueue<QualificationTip>)resultMap.get("tipQueue");
+        QualificationsResponseWrap qualificationsResponseWrap = new QualificationsResponseWrap(respones, request,
+            tipMap, tipQueue);
+        // 过滤掉异动人员和业务先行人员的响应数据
+        List<QualificationsResponse> filterWhiteListResponse = whiteListCheck(request, respones);
+        List<QualificationsResponse> filterNewMembeResponse = newMemberCheck(request, filterWhiteListResponse);
+        // 添加上不合法工号的响应结果
+        filterNewMembeResponse.addAll(
+            initInvalidWorkNoResponseList(request, request.getBlackList(), false, BLACK_LIST_WORKNO,
+                    BlackListWorkNoMsg));
+        filterNewMembeResponse.addAll(
+            initInvalidWorkNoResponseList(request, request.getInvalidWorkNoAndNotNewHwList(), true, INVALID_WORKNO,
+                INVALID_WORKNO_MSG));
+        filterNewMembeResponse.addAll(
+            initInvalidWorkNoResponseList(request, request.getInvalidWorkNoAndNewHwList(), true, NEW_MEMBER,
+                NEW_MEMBER_MSG));
+        qualificationsResponseWrap.setResponse(filterNewMembeResponse);
+        requestContextHolder.end();
+        return qualificationsResponseWrap;
+    }
+
+    protected Map<String, Object> getTipMap(List<QualificationsResponse> res, QualificationsRequest originRequest) {
+        Map<String, Object> resultMap = new HashMap<>();
+        Map<String, String> tipMap = new HashMap<>();
+        if (org.apache.commons.collections4.CollectionUtils.isEmpty(res)) {
+            resultMap.put("tipMap",tipMap);
+            return resultMap;
+        }
+        // 单人查询的时候才有提示
+        if (CollectionUtil.isNullOrEmpty(originRequest.getOriginWorkNoList())
+            || originRequest.getOriginWorkNoList().size() > 1) {
+            resultMap.put("tipMap",tipMap);
+            return resultMap;
+        }
+        Map<String, List<QualificationsResponse>> resultCollect = res.stream()
+            .collect(Collectors.groupingBy(QualificationsResponse::getAccount));
+        PriorityQueue<QualificationTip> queue = new PriorityQueue<>();
+        for (Map.Entry<String, List<QualificationsResponse>> entries : resultCollect.entrySet()) {
+            String workNo = entries.getKey();
+            // 	若近2年内有警示的IT安全违规违
+            Boolean warning = getWarning(workNo);
+            //  是否为外包人员
+            List<QualificationsResponse> workNoResult = entries.getValue();
+            doTip(originRequest, tipMap, workNo, workNoResult, warning, queue);
+        }
+        resultMap.put("tipMap",tipMap);
+        resultMap.put("tipQueue",queue);
+        return resultMap;
+    }
+
+    private Boolean getWarning(String workNo) {
+        EscalateVO escalateVO = new EscalateVO();
+        List list = new ArrayList<>();
+        list.add(workNo);
+        escalateVO.setWorkNos(list);
+        escalateVO.setFinalLevel("2");
+        int warningSecurityViolationDays = QualificationConfig.DEFAULT.getWarningSecurityViolationDays();
+        return !CollectionUtil.isNullOrEmpty(
+            escalateDao.getEscalateByEscalate(escalateVO, warningSecurityViolationDays));
+    }
+
+    private void doTip(QualificationsRequest originRequest, Map<String, String> tipMap, String workNo,
+        List<QualificationsResponse> workNoResult, Boolean warning, PriorityQueue<QualificationTip> queue) {
+        Map<String, String> accountHolder = originRequest.getAccountHolder();
+        // 人员类别map
+        Map<String, String> accountCatagrayHolder = originRequest.getAccountCatagrayHolder();
+        if (!org.apache.commons.collections4.CollectionUtils.isEmpty(workNoResult)) {
+            List<QualificationsResponse> successCollect = workNoResult.stream()
+                .filter(res -> !res.isFlag())
+                .collect(Collectors.toList());
+            if (!CollectionUtil.isNullOrEmpty(successCollect)) {
+                return;
+            }
+            String catagray = accountCatagrayHolder.get(workNo);
+            Boolean wxAcccount = CATAGRAY_OTH.equalsIgnoreCase(catagray) || CATAGRAY_EX_OTH.equalsIgnoreCase(catagray)
+                || StringUtil.isNullOrEmpty(catagray);
+            String account = accountHolder.get(workNo);
+            for (QualificationsResponse response : workNoResult) {
+                String isChangedPersonApply = response.getIsChangedPersonApply();
+                String expireDay = response.getExpireDay();
+                String securityExpireDay = response.getSecurityExpireDay();
+                changedPersonApply(tipMap, warning, account, isChangedPersonApply);
+                examTips(tipMap, wxAcccount, expireDay, securityExpireDay, queue);
+            }
+        }
+    }
+
+    private void examTips(Map<String, String> tipMap, Boolean wxAcccount, String expireDay, String securityExpireDay, PriorityQueue<QualificationTip> queue) {
+        if (wxAcccount) {
+            String workNoexamTipStr = String.format(Locale.ROOT, QualificationExecutorRuleConfig.OUTSOURCING_WARNING_MESSAGE);
+            doExamTips(tipMap, workNoexamTipStr);
+            // 满足外包提醒，则添加到提醒队列
+            QualificationTip tip = new QualificationTip(QualificationExecutorRuleConfig.OUTSOURCING_TIP_LEVLE,
+                    String.format(Locale.ROOT, QualificationExecutorRuleConfig.OUTSOURCING_WARNING_MESSAGE));
+            if (!queue.contains(tip)) {
+                queue.add(tip);
+            }
+        }
+        if (!StringUtil.isNullOrEmpty(expireDay) && Integer.parseInt(expireDay) > 0) {
+            String workNoexamTipStr = String.format(Locale.ROOT, QualificationExecutorRuleConfig.ITEXAM_EXPIRE_WARNING_MESSAGE, expireDay);
+            doExamTips(tipMap, workNoexamTipStr);
+            // 满足考试到期提醒，添加到提醒队列
+            QualificationTip tip = new QualificationTip(QualificationExecutorRuleConfig.ITEXAM_EXPIRE_TIP_LEVLE,
+                String.format(Locale.ROOT, QualificationExecutorRuleConfig.ITEXAM_EXPIRE_WARNING_MESSAGE, expireDay));
+            if (!queue.contains(tip)) {
+                queue.add(tip);
+            }
+        }
+        if (!StringUtil.isNullOrEmpty(securityExpireDay) && Integer.parseInt(securityExpireDay) > 0) {
+            String workNoexamTipStr = String.format(Locale.ROOT, QualificationExecutorRuleConfig.SECURITY_SIGNNING_EXPIRE_WARNING_MESSAGE,securityExpireDay);
+            doExamTips(tipMap, workNoexamTipStr);
+            // 满足IT岗位人员到期提醒，添加到提醒队列
+            QualificationTip tip = new QualificationTip(QualificationExecutorRuleConfig.SECURITYSIGNING_EXPIRE_TIP_LEVLE,
+                String.format(Locale.ROOT, QualificationExecutorRuleConfig.SECURITY_SIGNNING_EXPIRE_WARNING_MESSAGE, securityExpireDay));
+            if (!queue.contains(tip)) {
+                queue.add(tip);
+            }
+        }
+    }
+
+    private void doExamTips(Map<String, String> tipMap, String workNoexamTipStr) {
+        tipMap.put("examTips", workNoexamTipStr);
+        if (!tipMap.containsKey("tip")) {
+            tipMap.put("tip", "2");
+        }
+    }
+
+    private void changedPersonApply(Map<String, String> tipMap, Boolean warning, String account,
+        String isChangedPersonApply) {
+        if ("1".equals(isChangedPersonApply) && tipMap.get("changedPersons") == null && warning) {
+            String workNoChangedPersonStr = String.format(Locale.ROOT, "温馨提示,%s曾经有轻微IT安全违规，且存在波动，为风险人员，请您再次确认是否同意本次授权？",
+                account);
+            tipMap.put("changedPersons", workNoChangedPersonStr);
+            tipMap.put("tip", "3");
+        } else if ("1".equals(isChangedPersonApply) && tipMap.get("changedPersons") == null) {
+            String workNoChangedPersonStr = String.format(Locale.ROOT, "温馨提示,%s存在波动，为风险人员，请您再次确认是否同意本次授权？", account);
+            tipMap.put("changedPersons", workNoChangedPersonStr);
+            tipMap.put("tip", "3");
+        } else if (warning && tipMap.get("changedPersons") == null) {
+            String workNoChangedPersonStr = String.format(Locale.ROOT, "温馨提示，%s曾经有轻微IT安全违规，请您再次确认是否同意本次授权？", account);
+            tipMap.put("changedPersons", workNoChangedPersonStr);
+            tipMap.put("tip", "3");
+        }
+    }
+
+    protected List<QualificationsResponse> newMemberCheck(QualificationsRequest request,
+        List<QualificationsResponse> respones) {
+        if (CollectionUtils.isEmpty(respones)) {
+            return respones;
+        }
+        // 所有人的响应结果里面，首先根据人分组，然后将白名单人员的结果坐替换
+        // 属于白名单的查询记录
+        List<QualificationsResponse> newmember = filterNewmember(respones);
+        List<QualificationsResponse> notNewmemberList = respones.stream()
+            .filter(response -> !response.isNewMwmber())
+            .collect(Collectors.toList());
+        List<QualificationsResponse> newmemberReponse = loadQualificationAfter().dealAccessMember(request, newmember);
+        if (CollectionUtils.isNotEmpty(newmemberReponse)) {
+            notNewmemberList.addAll(newmemberReponse);
+        }
+        return notNewmemberList;
+    }
+
+    private List<QualificationsResponse> filterNewmember(List<QualificationsResponse> respones) {
+        return respones.stream().filter(response -> response.isNewMwmber()).collect(Collectors.toList());
+    }
+
+    /**
+     * 如果返回结果是过白名单，需要以白名单的名义返回 描述结构
+     *
+     * @param request 请求
+     * @param respones 响应
+     * @return 白名单的名义返回 描述结构
+     */
+    protected List<QualificationsResponse> whiteListCheck(QualificationsRequest request,
+        List<QualificationsResponse> respones) {
+        if (CollectionUtils.isEmpty(respones)) {
+            return respones;
+        }
+        // 所有人的响应结果里面，首先根据人分组，然后将白名单人员的结果做替换
+        // 属于白名单的查询记录
+        List<String> whiteRecords = filter(respones);
+        List<QualificationsResponse> noTrustListCollect = respones.stream()
+            .filter(response -> !whiteRecords.contains(response.getAccount()))
+            .collect(Collectors.toList());
+        List<QualificationsResponse> trustReponse = loadQualificationAfter().dealTrustList(request, whiteRecords);
+        if (CollectionUtils.isNotEmpty(trustReponse)) {
+            noTrustListCollect.addAll(trustReponse);
+        }
+        return noTrustListCollect;
+    }
+
+    public List<QualificationsResponse> initInvalidWorkNoResponseList(QualificationsRequest request,
+        List<String> invalidWorkNoList, boolean flag, String scenario, String message) {
+        List<QualificationsResponse> invalidWorkNoResponseList = new ArrayList<>();
+        if (request == null) {
+            return invalidWorkNoResponseList;
+        }
+        if (CollectionUtils.isEmpty(invalidWorkNoList)) {
+            return invalidWorkNoResponseList;
+        }
+        Map<String, String> accountHolder = request.getAccountHolder();
+        List<Account> accounts = request.getAccount();
+        if (request.getAccount() == null) {
+            invalidWorkNoList.forEach(invalidWorkNo -> {
+                QualificationsResponse res = new QualificationsResponse();
+                res.setScenario(scenario);
+                res.setAccount(AnonymizeUtils.getEmployee(invalidWorkNo));
+                res.setW3Account(
+                    accountHolder != null ? accountHolder.get(AnonymizeUtils.getEmployee(invalidWorkNo)) : "");
+                res.setFlag(flag);
+                res.setMessage(message);
+                invalidWorkNoResponseList.add(res);
+            });
+        } else {
+            for (Account account : accounts) {
+                invalidWorkNoList.forEach(invalidWorkNo -> {
+                    QualificationsResponse res = new QualificationsResponse();
+                    res.setAccountInfo(account);
+                    res.setScenario(scenario);
+                    res.setAccount(AnonymizeUtils.getEmployee(invalidWorkNo));
+                    res.setW3Account(
+                        accountHolder != null ? accountHolder.get(AnonymizeUtils.getEmployee(invalidWorkNo)) : "");
+                    res.setFlag(flag);
+                    res.setMessage(message);
+                    invalidWorkNoResponseList.add(res);
+                });
+            }
+        }
+        return invalidWorkNoResponseList;
+    }
+
+    private List<String> filter(List<QualificationsResponse> respones) {
+        Map<String, List<QualificationsResponse>> collect = respones.stream()
+            .collect(Collectors.groupingBy(QualificationsResponse::getAccount));
+        List<String> scenarios = Collections.unmodifiableList(Arrays.asList("0", "2"));
+        List<String> whiteListList = new ArrayList();
+        for (Map.Entry<String, List<QualificationsResponse>> entries : collect.entrySet()) {
+            List<QualificationsResponse> values = entries.getValue();
+            String workNumber = entries.getKey();
+            List<String> list = new ArrayList<>();
+            list.add(workNumber);
+            LogUtil.info("AbstractQualificationQuery::filter::工号::"+list);
+            List<Map<String, Object>> trustList = trustListDao.findTrustMap(list);
+            List<String> peopleScenarios = new ArrayList<>();
+            if (CollectionUtils.isNotEmpty(trustList)) {
+                peopleScenarios = trustList.stream()
+                    .map(rac -> (String) rac.get("scenario"))
+                    .collect(Collectors.toList());
+            }
+            LogUtil.info("AbstractQualificationQuery::filter::工号::"+list+"::白名单种类::"+peopleScenarios);
+            if (!CollectionUtils.isEmpty(peopleScenarios) && peopleScenarios.containsAll(scenarios) && allPast(values)) {
+                whiteListList.add(entries.getKey());
+            }
+        }
+        return whiteListList;
+    }
+
+    /*
+    * 判断是否有校验不通过项
+    * */
+    private boolean allPast(List<QualificationsResponse> res){
+        for (QualificationsResponse response: res){
+            if(!response.isFlag()){
+                return false;
+            }
+        }
+        return true;
+    }
+
+}
