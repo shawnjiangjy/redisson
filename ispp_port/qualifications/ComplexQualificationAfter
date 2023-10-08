@@ -1,0 +1,97 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.huawei.it.occsafe.common.AnonymizeUtils;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.Account;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponse;
+import com.huawei.it.occsafe.util.LogUtil;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * @author pWX814460
+ * @description ComplexQualificationAfter
+ * @since 2022/02/10 15:32
+ */
+@Service
+public class ComplexQualificationAfter extends AbstractQualificationAfter {
+    @Override
+    public List<QualificationsResponse> dealTrustList(QualificationsRequest request, List<String> trustList) {
+        List<QualificationsResponse> allTrustReponse = new ArrayList<>();
+        List<Account> accounts = request.getAccount();
+        if (CollectionUtils.isEmpty(accounts)) {
+            return allTrustReponse;
+        }
+        Map<String, String> accountHolder = request.getAccountHolder();
+        for (Account account : accounts) {
+            List<QualificationsResponse> trustReponse = new ArrayList<>();
+            trustList.forEach(item -> {
+                QualificationsResponse qualificationsResponse = new QualificationsResponse();
+                Account cloneObj = null;
+                try {
+                    cloneObj = Account.cloneObject(account);
+                    cloneObj.setScenario("1");
+                    qualificationsResponse.setAccountInfo(cloneObj);
+                } catch (NoSuchFieldException noSuchFieldException) {
+                    LogUtil.error(noSuchFieldException);
+                } catch (IllegalAccessException accessException) {
+                    LogUtil.error(accessException);
+                }
+                qualificationsResponse.setAccountSign(account.hashCode());
+                qualificationsResponse.setScenario("1");
+                qualificationsResponse.setMessage("白名单用户");
+                qualificationsResponse.setAccount(AnonymizeUtils.getEmployee(item));
+                qualificationsResponse.setW3Account(accountHolder.get(AnonymizeUtils.getEmployee(item)));
+                qualificationsResponse.setFlag(true);
+                trustReponse.add(qualificationsResponse);
+            });
+            allTrustReponse.addAll(trustReponse);
+        }
+        return allTrustReponse;
+    }
+
+    @Override
+    public List<QualificationsResponse> dealAccessMember(QualificationsRequest request,
+        List<QualificationsResponse> accessMember) {
+        List<Account> accounts = request.getAccount();
+        List<QualificationsResponse> accessMemberResponse = new ArrayList<>();
+        if (CollectionUtils.isEmpty(accounts)) {
+            return accessMemberResponse;
+        }
+        Map<String, String> accountHolder = request.getAccountHolder();
+        List<QualificationsResponse> allAccessMember = new ArrayList<>();
+        for (Account account : accounts) {
+            accessMember.forEach(item -> {
+                QualificationsResponse quResponse = new QualificationsResponse();
+                Account cloneObj = null;
+                try {
+                    cloneObj = Account.cloneObject(account);
+                    cloneObj.setScenario("6");
+                    quResponse.setAccountInfo(cloneObj);
+                } catch (NoSuchFieldException noSuchFieldException) {
+                    LogUtil.error(noSuchFieldException);
+                } catch (IllegalAccessException accessException) {
+                    LogUtil.error(accessException);
+                }
+                quResponse.setAccountSign(account.hashCode());
+                quResponse.setScenario("6");
+                quResponse.setIsChangedPersonApply(item.getIsChangedPersonApply());
+                quResponse.setAccount(AnonymizeUtils.getEmployee(item.getAccount()));
+                quResponse.setW3Account(accountHolder.get(AnonymizeUtils.getEmployee(item.getAccount())));
+                quResponse.setFlag(true);
+                accessMemberResponse.add(quResponse);
+            });
+        }
+        allAccessMember.addAll(accessMemberResponse);
+        return allAccessMember;
+    }
+}
