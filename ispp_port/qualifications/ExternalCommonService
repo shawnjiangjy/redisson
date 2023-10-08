@@ -1,0 +1,186 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2022. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.alibaba.fastjson.JSON;
+
+import com.huawei.it.jalor5.core.annotation.JalorResource;
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.occsafe.dao.eleflow.IBlackIPDao;
+import com.huawei.it.occsafe.dao.eleflow.IChangedPersonDao;
+import com.huawei.it.occsafe.dao.eleflow.IViolateDeductPointsDao;
+import com.huawei.it.occsafe.dao.escalate.IBaseAllPeopleInfoDao;
+import com.huawei.it.occsafe.service.eleflow.IBeforeProcessor;
+import com.huawei.it.occsafe.service.impl.eleflow.AEle;
+import com.huawei.it.occsafe.service.impl.eleflow.EleFrame;
+import com.huawei.it.occsafe.service.impl.eleflow.exception.BeforeProcessorException;
+import com.huawei.it.occsafe.service.qualifications.IExternalCommonService;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.vo.ResultVo;
+import com.huawei.it.occsafe.vo.ViolateDeductPointsVO;
+import com.huawei.it.occsafe.vo.eleflow.BlackIPVO;
+import com.huawei.it.occsafe.vo.eleflow.ChangedPersonnelVO;
+import com.huawei.it.occsafe.vo.escalate.BaseAllPeopleInfoVO;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * @author pWX814460
+ * @description ExternalCommonService对外服务
+ * @since 2021/11/20 14:34
+ */
+@Named
+@JalorResource(code = "Occ.ExternalCommonService", desc = "对外查询服务")
+public class ExternalCommonService implements IExternalCommonService {
+    @Inject
+    private IChangedPersonDao changedPersonDao;
+
+    @Inject
+    private IBlackIPDao blackIPDao;
+
+    @Inject
+    private IViolateDeductPointsDao violateDeductPointsDao;
+
+    @Inject
+    private IBaseAllPeopleInfoDao baseAllPeopleInfoDao;
+
+    @Autowired
+    @Qualifier("violateDeductPointsWorkNoBeforeProcessor")
+    private IBeforeProcessor violateDeductPointsWorkNoBeforeProcessor;
+
+    @Override
+    public ResultVo<Object> blackIPIntegration(BlackIPVO blackIpVo) {
+        ResultVo result = new ResultVo(false);
+        if (StringUtil.isNullOrEmpty(blackIpVo.getTaskId())) {
+            result.setResult("empty taskId");
+            return result;
+        }
+        String plannedCompletionTime = blackIpVo.getPlannedCompletionTime();
+        if (!StringUtil.isNullOrEmpty(plannedCompletionTime)) {
+            blackIpVo.setPlannedCompletionTime(plannedCompletionTime.substring(0, 10));
+        }
+        String processingCompletionTime = blackIpVo.getProcessingCompletionTime();
+        if (!StringUtil.isNullOrEmpty(processingCompletionTime)) {
+            blackIpVo.setProcessingCompletionTime(processingCompletionTime.substring(0, 10));
+        }
+        try {
+            String request = JSON.toJSONString(blackIpVo);
+            LogUtil.info("request param:[" + request + "]");
+            BlackIPVO oneBlackIP = blackIPDao.findOneBlackIP(blackIpVo);
+            if (oneBlackIP != null) {
+                blackIpVo.setId(oneBlackIP.getId());
+            }
+            String applyer = blackIpVo.getApplyer();
+            String owner = blackIpVo.getOwner();
+            String filterApplyer = com.huawei.it.occsafe.util.StringUtil.formatUuid(applyer);
+            String filterOwner = com.huawei.it.occsafe.util.StringUtil.formatUuid(owner);
+            List<BaseAllPeopleInfoVO> baselist = formatEmp(filterApplyer, filterOwner);
+            baselist.forEach(item -> {
+                String employeeNumber = StringUtil.isNullOrEmpty(item.getEmployeeNumber())
+                    ? ""
+                    : item.getEmployeeNumber().toUpperCase(Locale.ROOT);
+                if (filterApplyer.equalsIgnoreCase(item.getUuid())) {
+                    blackIpVo.setApplyer(employeeNumber);
+                    blackIpVo.setLastUpdatePerson(employeeNumber);
+                }
+                if (filterOwner.equalsIgnoreCase(item.getUuid())) {
+                    blackIpVo.setOwner(employeeNumber);
+                }
+            });
+            blackIPDao.saveOrUpdate(blackIpVo);
+            result.setState(true);
+        } catch (Exception exception) {
+            LogUtil.error("error blackIPIntegration", exception);
+            result.setResult("error blackIPIntegration");
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    public ResultVo<Object> changedPersonIntegration(ChangedPersonnelVO cpVo) {
+        ResultVo result = new ResultVo(false);
+        try {
+            String request = JSON.toJSONString(cpVo);
+            LogUtil.info("request param:[" + request + "]");
+            if (cpVo == null) {
+                return new ResultVo(false, "", "null");
+            }
+            String applyer = cpVo.getApplyer();
+            String changedPerson = cpVo.getChangedPerson();
+            String filterApplyer = com.huawei.it.occsafe.util.StringUtil.formatUuid(applyer);
+            String filterChangedPerson = com.huawei.it.occsafe.util.StringUtil.formatUuid(changedPerson);
+            List<BaseAllPeopleInfoVO> baselist = formatEmp(filterApplyer, filterChangedPerson);
+            baselist.forEach(item -> {
+                String employeeNumber = StringUtil.isNullOrEmpty(item.getEmployeeNumber())
+                    ? ""
+                    : item.getEmployeeNumber().toUpperCase(Locale.ROOT);
+                if (filterApplyer.equalsIgnoreCase(item.getUuid())) {
+                    cpVo.setApplyer(employeeNumber);
+                    cpVo.setLastUpdatePerson(employeeNumber);
+                }
+                if (filterChangedPerson.equalsIgnoreCase(item.getUuid())) {
+                    cpVo.setChangedPerson(employeeNumber);
+                }
+            });
+            // 数据来源为异动电子流
+            cpVo.setDataSource("ELE");
+            changedPersonDao.save(cpVo);
+            result.setState(true);
+        } catch (Exception exception) {
+            LogUtil.error("error changedPersonIntegration", exception);
+            result.setResult("error changedPersonIntegration");
+            result.setMessage(exception.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    public ResultVo<Object> violateDeductPoints(ViolateDeductPointsVO vdpVo) {
+        String vdpVoStr = JSON.toJSONString(vdpVo);
+        LogUtil.info("violateDeductPoints info:" + vdpVoStr);
+        List<ViolateDeductPointsVO> list = new ArrayList();
+        list.add(vdpVo);
+        List<IBeforeProcessor> befores = new ArrayList<>();
+        befores.add(violateDeductPointsWorkNoBeforeProcessor);
+        // 识别uuid类型的工号，需要调用转换服务
+        EleFrame<ViolateDeductPointsVO, AEle> violateDeductPointsVOAEleEleFrame = new EleFrame<>(befores, null, null);
+        try {
+            violateDeductPointsVOAEleEleFrame.ele(list, new AEle(violateDeductPointsDao));
+        } catch (BeforeProcessorException beforeProcessorException) {
+            return new ResultVo(false, beforeProcessorException.getMessage());
+        } catch (Exception exception) {
+            return new ResultVo(false, exception.getMessage());
+        }
+        return new ResultVo(true);
+    }
+
+    /**
+     * 格式话uuid格式的工号
+     *
+     * @param person 请求参数数组
+     * @return 返回人员信息
+     */
+    private List<BaseAllPeopleInfoVO> formatEmp(String... person) {
+        List<BaseAllPeopleInfoVO> query = new ArrayList<>();
+        if ((person == null) || (person.length == 0)) {
+            return query;
+        }
+        for (String personS : person) {
+            BaseAllPeopleInfoVO baseVo = new BaseAllPeopleInfoVO();
+            baseVo.setUuid(personS);
+            query.add(baseVo);
+        }
+        return baseAllPeopleInfoDao.getPersonInfo(query);
+    }
+}
