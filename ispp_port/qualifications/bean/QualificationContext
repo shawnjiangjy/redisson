@@ -1,0 +1,109 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2022. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications.bean;
+
+import com.huawei.it.occsafe.service.qualifications.IQualificationQueryRule;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.util.ThreadUtil;
+
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+
+import javax.annotation.PreDestroy;
+
+/**
+ * @author pWX814460
+ * @description 对外资质运行上下文
+ * @date 2020/12/4 15:15
+ */
+public class QualificationContext {
+
+    private static ExecutorService executorService = ThreadUtil.getExecutors(30);
+
+    Map<IQualificationQueryRule, QueryRuleContext> map = new HashMap<>();
+
+    /**
+     * 注册IQualificationQueryRule
+     *
+     * @param rule 执行规则
+     * @param ctx 执行规则上下文
+     */
+    public void register(IQualificationQueryRule rule, QueryRuleContext ctx) {
+        if (map.get(rule) == null) {
+            map.put(rule, ctx);
+        }
+    }
+
+    /**
+     * getDefaultContext
+     *
+     * @return 结果集
+     */
+    public static QualificationContext getDefaultContext() {
+        return new QualificationContext();
+    }
+
+    /**
+     * 运行对外资质上下文
+     *
+     * @return 返回响应结果集
+     */
+    public List<QualificationsResponse> run() {
+        List<QualificationsResponse> qualificationsResponses = new ArrayList<>();
+        int size = map.size();
+        LogUtil.info("------checksenior size is------"+ size);
+        CountDownLatch latch = new CountDownLatch(size);
+        ConcurrentHashMap<String, List<QualificationsResponse>> result = new ConcurrentHashMap(size);
+        if (!map.isEmpty()) {
+            ServletRequestAttributes requestAttributes
+                = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            for (Map.Entry<IQualificationQueryRule, QueryRuleContext> entry : map.entrySet()) {
+                executorService.execute(() -> {
+                    RequestContextHolder.setRequestAttributes(requestAttributes);
+                    IQualificationQueryRule key = entry.getKey();
+                    List<QualificationsResponse> qualificationsResponses1 = null;
+                    try {
+                        LogUtil.info("------checksenior name is------"+ key.getClass().getSimpleName());
+                        LogUtil.info("------person number is------"+ entry.getValue().getRulelist().toString());
+                        qualificationsResponses1 = key.checkRule(entry.getValue());
+                    } catch (IOException ioException) {
+                        LogUtil.error(ioException);
+                    } catch (ClassNotFoundException classNotFoundException) {
+                        LogUtil.error(classNotFoundException);
+                    }
+                    result.put(key.getClass().getCanonicalName(), qualificationsResponses1);
+                    latch.countDown();
+                });
+            }
+            try {
+                latch.await();
+            } catch (InterruptedException exc) {
+                LogUtil.error("thread interrupted!", exc);
+            }
+            // map存储的多个场景查询返回的结果汇总
+            for (List<QualificationsResponse> subResult : result.values()) {
+                qualificationsResponses.addAll(subResult);
+            }
+        }
+        return qualificationsResponses;
+    }
+
+    /**
+     * shutdown
+     */
+    @PreDestroy
+    private void shutdown() {
+        ThreadUtil.close(executorService, this.getClass());
+    }
+}
