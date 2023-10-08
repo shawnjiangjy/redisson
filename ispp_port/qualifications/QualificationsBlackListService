@@ -1,0 +1,133 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.huawei.it.jalor5.core.annotation.JalorOperation;
+import com.huawei.it.jalor5.core.annotation.JalorResource;
+import com.huawei.it.jalor5.core.base.PageVO;
+import com.huawei.it.jalor5.core.base.PagedResult;
+import com.huawei.it.occsafe.dao.escalate.IBaseAllPeopleInfoDao;
+import com.huawei.it.occsafe.dao.qualification.IQualificationsBlackListDao;
+import com.huawei.it.occsafe.service.eleflow.IBeforeProcessor;
+import com.huawei.it.occsafe.service.impl.eleflow.AEle;
+import com.huawei.it.occsafe.service.impl.eleflow.EleFrame;
+import com.huawei.it.occsafe.service.qualifications.IQualificationsBlackListService;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.vo.ResultVo;
+import com.huawei.it.occsafe.vo.escalate.BaseAllPeopleInfoVO;
+import com.huawei.it.occsafe.vo.qualification.QualificationsBlackListVO;
+
+import com.alibaba.fastjson.JSON;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+
+/**
+ * @author pWX814460
+ * @description QualificationsBlackListService.
+ * @create 2022/8/12 15:33
+ * @since 2022/8/12 15:33
+ */
+@Named
+@JalorResource(code = "Occ.QualificationsBlackListService", desc = "人员资质黑名单管理")
+public class QualificationsBlackListService implements IQualificationsBlackListService {
+
+    @Inject
+    private IQualificationsBlackListDao qualificationsBlackListDao;
+
+    @Inject
+    private IBaseAllPeopleInfoDao baseAllPeopleInfoDao;
+
+    @Autowired
+    @Qualifier("operationMaintenanceLockWorkNoBeforeProcessor")
+    private IBeforeProcessor operationMaintenanceLockWorkNoBeforeProcessor;
+
+    @Override
+    @JalorOperation(code = "selectBlackList", desc = "查询黑名单分页数据")
+    public PagedResult<QualificationsBlackListVO> selectBlackList(String params, int currentPage, int pageSize) {
+        try {
+            QualificationsBlackListVO qualificationsBlackListVO = JSON.parseObject(params,
+                QualificationsBlackListVO.class);
+            PageVO pageVO = new PageVO();
+            pageVO.setCurPage(currentPage);
+            pageVO.setPageSize(pageSize);
+            return qualificationsBlackListDao.selectBlackList(qualificationsBlackListVO, pageVO);
+        } catch (Exception exception) {
+            LogUtil.error("selectBlackList error", exception);
+            return new PagedResult();
+        }
+    }
+
+    @Override
+    @JalorOperation(code = "saveOrUpdate", desc = "修改后者新增黑名单")
+    public ResultVo saveOrUpdate(List<QualificationsBlackListVO> vos) {
+        try {
+            List<String> employeeNumberList = qualificationsBlackListDao.selectEmployeeList();
+            if(!CollectionUtils.isEmpty(vos)){
+                // 通过id是否为空来判断是新增还是修改。如果是新增的话，id是为空的
+                for (QualificationsBlackListVO vo : vos) {
+                    // 如果id是空的，则为添加，添加校验记录工号的唯一性，如果出错，则全部不操作
+                    if (vo.getId() == null && employeeNumberList.contains(vo.getEmployeNumber())) {
+                        return new ResultVo(false, "fail", "工号" + vo.getEmployeNumber() + "黑名单已存在");
+                    }
+                }
+                qualificationsBlackListDao.saveOrUpdate(vos);
+            }
+            return new ResultVo(true, "success", "success");
+        } catch (Exception exception) {
+            return new ResultVo(false, "fail", exception.getMessage());
+        }
+    }
+
+    @Override
+    @JalorOperation(code = "saveOrUpdate", desc = "软删除黑名单数据")
+    public ResultVo delete(int id) {
+        try {
+            if (id >= 0) {
+                qualificationsBlackListDao.delete(id);
+            }
+            return new ResultVo(true, "success", "success");
+        } catch (Exception exception) {
+            return new ResultVo(false, "fail", exception.getMessage());
+        }
+    }
+
+    @Override
+    public ResultVo<Object> operationMaintenanceLock(QualificationsBlackListVO qblVO) {
+        // 将更新人的uuid转为w3账号
+        List<BaseAllPeopleInfoVO> query = new ArrayList<>();
+        BaseAllPeopleInfoVO baseAllPeopleInfoVO = new BaseAllPeopleInfoVO();
+        baseAllPeopleInfoVO.setUuid(qblVO.getUpdatePerson());
+        query.add(baseAllPeopleInfoVO);
+        qblVO.setUpdatePerson(baseAllPeopleInfoDao.getPersonInfo(query).get(0).getW3Accout());
+
+        qblVO.setValidStartDate(qblVO.getValidStartDate().substring(0, 10));
+        qblVO.setValidDeadDate(qblVO.getValidDeadDate().substring(0, 10));
+
+        String qblVOStr = JSON.toJSONString(qblVO);
+        LogUtil.info("operationMaintenanceLock info:" + qblVOStr);
+        List<QualificationsBlackListVO> list = new ArrayList();
+        list.add(qblVO);
+        List<IBeforeProcessor> befores = new ArrayList<>();
+        befores.add(operationMaintenanceLockWorkNoBeforeProcessor);
+        // 识别uuid类型的工号，需要调用转换服务
+        EleFrame<QualificationsBlackListVO, AEle> qualificationsBlackListVOAEleEleFrame = new EleFrame<>(befores, null, null);
+        try {
+            qualificationsBlackListVOAEleEleFrame.ele(list, new AEle(qualificationsBlackListDao));
+            return new ResultVo(true, "success", "success");
+        } catch (Exception exception) {
+            exception.printStackTrace();
+            return new ResultVo(false, "fail", exception.getMessage());
+        }
+    }
+}
