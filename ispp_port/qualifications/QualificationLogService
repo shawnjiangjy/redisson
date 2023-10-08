@@ -1,0 +1,174 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.alibaba.fastjson.JSON;
+
+import com.huawei.it.jalor5.core.annotation.JalorOperation;
+import com.huawei.it.jalor5.core.annotation.JalorResource;
+import com.huawei.it.jalor5.core.base.PageVO;
+import com.huawei.it.jalor5.core.base.PagedResult;
+import com.huawei.it.jalor5.core.exception.ApplicationException;
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.occsafe.dao.ISelectOptionConfigDao;
+import com.huawei.it.occsafe.dao.qualification.IQualificationsLogDao;
+import com.huawei.it.occsafe.service.qualifications.IQualificationsLogService;
+import com.huawei.it.occsafe.util.DateUtil;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.util.PageUtil;
+import com.huawei.it.occsafe.vo.ResultVo;
+import com.huawei.it.occsafe.vo.SelectOptionConfigVO;
+import com.huawei.it.occsafe.vo.qualification.QualificationsLogStatisticVO;
+import com.huawei.it.occsafe.vo.qualification.QualificationsLogVO;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * @author pWX814460
+ * @description QualificationsService
+ * @since 2020/11/3 14:34
+ */
+@Named
+@JalorResource(code = "Occ.QualificationLogService", desc = "查询服务web")
+public class QualificationLogService implements IQualificationsLogService {
+
+    @Inject
+    private IQualificationsLogDao qualificationsLogDao;
+
+    @Inject
+    private ISelectOptionConfigDao selectOptionConfigDao;
+
+    @Override
+    @JalorOperation(code = "getQualificationsLogList", desc = "查询人员资质分页列表")
+    public PagedResult<QualificationsLogVO> getQualificationsLogList(String params, int pageSize, int curPage)
+        throws ApplicationException {
+        PagedResult<QualificationsLogVO> list;
+        try {
+            PageVO pageVO = PageUtil.getPageVO(curPage, pageSize);
+            QualificationsLogVO qualificationsLogVO = JSON.parseObject(params, QualificationsLogVO.class);
+            if (qualificationsLogVO != null) {
+                String account = qualificationsLogVO.getAccount();
+                qualificationsLogVO.setAccount(
+                    StringUtil.isNullOrEmpty(account) ? account : account.toLowerCase(Locale.ROOT));
+                qualificationsLogVO.setInvokeTimeStart(
+                    DateUtil.formatDate(qualificationsLogVO.getInvokeTimeStart(), "yyyy-MM-dd 00:00:00.000"));
+                qualificationsLogVO.setInvokeTimeEnd(
+                    DateUtil.formatDate(qualificationsLogVO.getInvokeTimeEnd(), "yyyy-MM-dd 23:59:59.999"));
+            }
+            list = qualificationsLogDao.findList(qualificationsLogVO, pageVO);
+        } catch (Exception exception) {
+            list = new PagedResult<>();
+            LogUtil.error("error getQualificationsLogList", exception);
+        }
+        return list;
+    }
+
+    @Override
+    @JalorOperation(code = "getAllSystem", desc = "查询所有的调用系统")
+    public List<SelectOptionConfigVO> getAllSystem() {
+        List<SelectOptionConfigVO> config = new ArrayList<>();
+        try {
+            SelectOptionConfigVO selectOptionConfigVO = new SelectOptionConfigVO();
+            selectOptionConfigVO.setModule("appIdMapping");
+            config = selectOptionConfigDao.findConfig(selectOptionConfigVO);
+        } catch (Exception exception) {
+            LogUtil.error("error getAllSystem", exception);
+        }
+        return config;
+    }
+
+    @Override
+    public ResultVo<QualificationsLogStatisticVO> calcByExpression(String params, int type) {
+        ResultVo<QualificationsLogStatisticVO> result = new ResultVo(false);
+        QualificationsLogVO qualificationsLogVO = null;
+        List<QualificationsLogStatisticVO> list = new ArrayList<>();
+        try {
+            qualificationsLogVO = JSON.parseObject(params, QualificationsLogVO.class);
+            String invokeTimeStart = qualificationsLogVO.getInvokeTimeStart();
+            String invokeTimeEnd = qualificationsLogVO.getInvokeTimeEnd();
+            long day = 15L;
+            long inputTimeInterval = 0L;
+            if (!StringUtil.isNullOrEmpty(invokeTimeStart) && !StringUtil.isNullOrEmpty(invokeTimeEnd)) {
+                long startTimestamp = getTimestamp(invokeTimeStart + " 00:00:00", "yyyy-MM-dd HH:mm:ss");
+                long endTimestamp = getTimestamp(invokeTimeEnd + " 00:00:00", "yyyy-MM-dd HH:mm:ss");
+                long realEndTimestamp = getTimestamp(getNewTimeStr(invokeTimeEnd, "yyyy-MM-dd") + " 00:00:00",
+                    "yyyy-MM-dd HH:mm:ss");
+                long nowTimestamp = new Date().getTime();
+                day = ((endTimestamp - startTimestamp) / (1000 * 60 * 60 * 24));
+                inputTimeInterval = ((nowTimestamp - realEndTimestamp) / (1000 * 60 * 60 * 24));
+            }
+            int limitFormatDay = (int) day;
+            if (qualificationsLogVO == null) {
+                qualificationsLogVO = new QualificationsLogVO();
+            }
+            list = invoke(type, qualificationsLogVO, list, (int) inputTimeInterval, limitFormatDay);
+        } catch (Exception exception) {
+            LogUtil.error(exception.getMessage());
+            new ResultVo(false, list, exception.getMessage());
+            return result;
+        }
+        return new ResultVo(true, list, "");
+    }
+
+    private List<QualificationsLogStatisticVO> invoke(int type, QualificationsLogVO qualificationsLogVO,
+        List<QualificationsLogStatisticVO> list, int inputTimeInterval, int limitFormatDay) {
+        if (type == 0) {
+            // 按天
+            list = qualificationsLogDao.calcByDay(inputTimeInterval, limitFormatDay, qualificationsLogVO);
+        }
+        if (type == 1) {
+            // 按月
+            list = qualificationsLogDao.calcByMonth(12, qualificationsLogVO);
+        }
+        if (type == 2) {
+            // 按资质校验结果统计
+            QualificationsLogStatisticVO qualificationsLogStatistic = qualificationsLogDao.calcInvokeCount(
+                qualificationsLogVO);
+            list.add(qualificationsLogStatistic);
+        }
+        if (type == 3) {
+            // 按调用场景统计
+            list = qualificationsLogDao.calcByFieldScenario(qualificationsLogVO);
+        }
+        if (type == 4) {
+            // 按调用系统统计
+            list = qualificationsLogDao.calcByField(qualificationsLogVO, 0);
+        }
+        if (type == 5) {
+            // 按一级部门统计
+            list = qualificationsLogDao.calcByField(qualificationsLogVO, 1);
+        }
+        if (type == 6) {
+            // 按不通过原因统计
+            QualificationsLogStatisticVO qualificationsLogStatistic = qualificationsLogDao.calcByCauseNew(
+                qualificationsLogVO);
+            list.add(qualificationsLogStatistic);
+        }
+        return list;
+    }
+
+    private static long getTimestamp(String date, String pattern) {
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(pattern);
+        LocalDateTime startLocalDateTime = LocalDateTime.parse(date, dateTimeFormatter);
+        return startLocalDateTime.toInstant(ZoneOffset.ofHours(8)).toEpochMilli();
+    }
+
+    private static String getNewTimeStr(String date, String pattern) {
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(pattern);
+        LocalDate localDateTime = LocalDate.parse(date, dateTimeFormatter);
+        LocalDate localDate = localDateTime.plusDays(-1);
+        return localDate.format(dateTimeFormatter);
+    }
+}
