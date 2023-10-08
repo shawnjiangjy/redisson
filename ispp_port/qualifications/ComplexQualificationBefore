@@ -1,0 +1,101 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.occsafe.dao.IEmployeeRecordDao;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationContext;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QueryRuleContext;
+import com.huawei.it.occsafe.service.impl.qualifications.config.QualificationConfig;
+import com.huawei.it.occsafe.service.impl.qualifications.config.QualificationExecutorRuleConfig;
+import com.huawei.it.occsafe.service.impl.qualifications.factory.QuerySenerioFactory;
+import com.huawei.it.occsafe.util.LogUtil;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.springframework.stereotype.Service;
+
+import javax.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * @author pWX814460
+ * @description QualificationBefore
+ * @since 2020/11/4 10:19
+ */
+@Service
+public class ComplexQualificationBefore extends AbstractQualificationBefore {
+
+    // 变更系统调用场景
+    private static final String CHANGE_SYSTEM = "11";
+
+    @Inject
+    IEmployeeRecordDao employeeRecordDao;
+
+    @Override
+    public QualificationContext checkScenario(QualificationsRequest request) {
+        // 场景1 只查询it认证考试规则
+        // 场景2 2-1 机要人员或红区机要区 2-2 非场景2-1
+        String area = request.getArea();
+        QualificationContext context = QualificationContext.getDefaultContext();
+        List<String> workNoList = request.getWorkNoList();
+        // 判断是否为变更系统调用
+        if(isChangeSystem()){
+            context.register(QuerySenerioFactory.getSenerio(QualificationExecutorRuleConfig.RULE_SEVEN), new QueryRuleContext(request, workNoList, CHANGE_SYSTEM));
+        }
+        // 查询是否开启只验证it认证考试开关
+        LogUtil.info("------open person qualification------"+QualificationConfig.DEFAULT.getItExamUnique());
+        if (QualificationConfig.DEFAULT.getItExamUnique()) {
+            context.register(QuerySenerioFactory.getSenerio("6"), new QueryRuleContext(request, workNoList, "2"));
+            return context;
+        }
+        // 红区机要区
+        if ((!StringUtil.isNullOrEmpty(area) && Integer.parseInt(area) == 1)) {
+            // 所有账号走红区机要区规则
+            context.register(QuerySenerioFactory.getSenerio("5"), new QueryRuleContext(request, workNoList, "3"));
+            return context;
+        }
+        LogUtil.info("------getjyMembers start------");
+        // 机要人员
+        List<String> jyMembers = isJy(workNoList);
+        LogUtil.info("------getjyMembers end------");
+        List<String> notJyMembers = workNoList;
+        if (!CollectionUtils.isEmpty(jyMembers)) {
+            context.register(QuerySenerioFactory.getSenerio("5"), new QueryRuleContext(request, jyMembers, "3"));
+            notJyMembers = com.huawei.it.occsafe.util.StringUtil.removeSimilarList(workNoList, jyMembers);
+        }
+        // 获取非机要人员
+        difPart(context, request, notJyMembers);
+        return context;
+    }
+
+    /**
+     * 机要人员判断
+     *
+     * @param workNos 账号
+     * @return true机要人员 false 非机要人员
+     */
+    private List<String> isJy(List<String> workNos) {
+        List<String> jyMember = new ArrayList<>();
+        if (CollectionUtils.isEmpty(workNos)) {
+            return jyMember;
+        }
+        jyMember = employeeRecordDao.getJyMember(workNos);
+        if (!CollectionUtils.isEmpty(jyMember)) {
+            jyMember.replaceAll(String::toUpperCase);
+        }
+        return jyMember;
+    }
+
+    @Override
+    protected void difPart(QualificationContext context, QualificationsRequest request, List<String> notJyMembers) {
+        // 获取非机要人员
+        if (!CollectionUtils.isEmpty(notJyMembers)) {
+            context.register(QuerySenerioFactory.getSenerio("4"), new QueryRuleContext(request, notJyMembers, ""));
+        }
+    }
+}
