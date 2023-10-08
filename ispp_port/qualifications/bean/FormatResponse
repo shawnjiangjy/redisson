@@ -1,0 +1,246 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications.bean;
+
+import com.huawei.it.jalor5.core.util.StringUtil;
+import com.huawei.it.occsafe.common.AnonymizeUtils;
+import com.huawei.it.occsafe.enums.MessagePushEnum;
+import com.huawei.it.occsafe.vo.portrait.PersonInfoVO;
+import com.huawei.it.occsafe.vo.qualification.QualificationsLogVO;
+
+import com.alibaba.fastjson.JSON;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.StringUtils;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.StringJoiner;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+/**
+ * @author pWX814460
+ * @description 将对外资质查询接口返回的结果集格式化成对外暴露所需要的样式
+ * @since 2021/02/02 11:32
+ */
+public class FormatResponse {
+    private List<PersonInfoVO> personInfos;
+
+    private QualificationsResponseWrap qrw;
+
+    private AtomicReference<String> code;
+
+    private String fqDes;
+
+    private String errorMsg;
+
+    private StringJoiner des;
+
+    private List<QualificationsLogVO> logs;
+
+    private String scenario;
+
+    private Map<String, Object> map;
+
+    // 消息提醒队列
+    private PriorityQueue<QualificationTip> queue;
+
+    // 优先级最高的消息提醒
+    private String examTips ;
+
+    public FormatResponse(List<PersonInfoVO> personInfos, QualificationsResponseWrap wrap, AtomicReference<String> code,
+        StringJoiner des, List<QualificationsLogVO> logs, String scenario, Map<String, Object> map, PriorityQueue<QualificationTip> queue) {
+        this.personInfos = personInfos;
+        this.qrw = wrap;
+        this.code = code;
+        this.des = des;
+        this.logs = logs;
+        this.scenario = scenario;
+        this.map = map;
+        this.queue = queue;
+    }
+
+    public String getFqDes() {
+        return fqDes;
+    }
+
+    public String getScenario() {
+        return scenario;
+    }
+
+    public String getExamTips() { return examTips; }
+
+    /**
+     * 调用
+     *
+     * @return 返回格式化结果
+     */
+    public FormatResponse invoke() {
+        // 处理提醒消息
+        Map<String, String> tipMap = getTipMap();
+        String remindTips = map.get("changedPersons") != null ? (String) map.get("changedPersons") : "";
+        List<QualificationsResponse> res = qrw.getResponse();
+        if (!CollectionUtils.isEmpty(res)) {
+            saveLog(res,tipMap,remindTips);
+        }
+        return this;
+    }
+
+    /**
+     * 记录日志
+     */
+    private void saveLog(List<QualificationsResponse> res,Map<String, String> tipMap,String remindTips) {
+        // 按账号分组
+        Map<String, List<QualificationsResponse>> collect = res.stream().collect(Collectors.groupingBy(QualificationsResponse::getAccount));
+        QualificationsRequest request = qrw.getRequest();
+        Map<String, String> accountHolder = request.getAccountHolder();
+        // 有几个账号就要录入几条日志和对应账号的返回信息
+        for (Map.Entry<String, List<QualificationsResponse>> entry : collect.entrySet()) {
+            // isPass 用于记录没个工号校验结果，如果校验不通过就会在addString()方法里被修改为‘0’
+            String isPass = "1";
+            // 对应帐号的code
+            String singleCode = "1";
+            String key = AnonymizeUtils.getEmployee(entry.getKey());
+            StringJoiner subDes = new StringJoiner(",", key + ":", ";");
+            List<QualificationsResponse> value = entry.getValue();
+            // 组装每个账号的响应信息
+            QualificationsResponse qNode = value.get(0);
+            if (qNode.getRequest() == null) {
+                // 执行返回
+                request = JSON.parseObject((String) map.get("params"), QualificationsRequest.class);
+            }
+            scenario = qNode.getScenario();
+            QualificationsLogVO logVo = new QualificationsLogVO();
+            if (request != null) {
+                setLogInfo(request, accountHolder, qNode, logVo);
+            }
+            String singleCodeAndIsPass = addString(singleCode, subDes, value, isPass);
+            singleCode = singleCodeAndIsPass.split(" ")[0];
+            isPass = singleCodeAndIsPass.split(" ")[1];
+            // 拼接违规项
+            if ("0".equals(singleCode)) {
+                des.add(subDes.toString());
+            }
+            // 从personInfos中获取姓名和部门
+            loadPersonInfo(key, logVo);
+            getLogVoCommon((Long) map.get("costTime"), errorMsg, singleCode, subDes, logVo);
+            logVo.setCallSystem((String) map.get("callSystem"));
+            logVo.setTaskId(UUID.randomUUID().toString());
+            logVo.setExpireDay(examTips);
+            logVo.setIsChangedPersonDoApply(remindTips);
+            logVo.setResultMessage(isPass);
+            logVo.setAccountResultMessage(isPass);
+            logVo.setTipCode(tipMap.get("tipCode"));
+            // 封装提醒场景
+            StringBuilder sb = new StringBuilder();
+            if (!StringUtil.isNullOrEmpty(tipMap.get("tipCode"))) {
+                String [] tipCodes = tipMap.get("tipCode").split(",");
+                for (int i = 0; i <tipCodes.length ; i++) {
+                    sb.append(MessagePushEnum.getDes(tipCodes[i])+",");
+                }
+                logVo.setTipScenario(sb.toString());
+            }
+            logs.add(logVo);
+        }
+        fqDes = des.toString();
+        // 如果有异常信息，直接把描述修改成异常信息
+        if (StringUtils.isNotBlank(errorMsg)) {
+            fqDes = errorMsg;
+        }
+    }
+
+    /**
+     * 封装提醒消息和提醒标签
+     */
+    private Map<String,String> getTipMap() {
+        StringBuilder warningTips = new StringBuilder();
+        String tipCode = "";
+        Map<String,String> result = new HashMap<>();
+        if (queue!=null && queue.size()>0) {
+            // 小顶堆排序，队列第一个就是优先级最高的提醒消息
+            examTips = queue.peek().getTips();
+            StringBuilder sb = new StringBuilder();
+            while (!queue.isEmpty()) {
+                QualificationTip poll = queue.poll();
+                sb.append(poll.getLevel()+",");
+                warningTips.append(poll.getTips()+"; ");
+            }
+            tipCode = sb.length()>0? sb.substring(0,sb.length()-1):"";
+        }
+        result.put("warningTips",warningTips.toString());
+        result.put("tipCode",tipCode);
+        return result;
+    }
+
+    private String addString(String singleCode, StringJoiner subDes, List<QualificationsResponse> value, String isPass) {
+        for (QualificationsResponse item : value) {
+            if (!item.isFlag()) {
+                // 多个工号只要有一个人校验不通过，那么code设置为0，那么此次资质检验不通过
+                code.set("0");
+                isPass = "0";
+                singleCode = "0";
+                subDes.add(item.getMessage());
+            }
+            // 捕获到异常信息
+            if (StringUtils.isNotEmpty(item.getErrorMsg())) {
+                errorMsg = item.getErrorMsg();
+                break;
+            }
+            // 正常情况下 返回的违规项
+        }
+        return singleCode+" "+isPass;
+    }
+
+    private void setLogInfo(QualificationsRequest request, Map<String, String> accountHolder,
+        QualificationsResponse qNode, QualificationsLogVO logVo) {
+        // 获取参数并录入调用记录表 只有验证通过采取获取参数的值，不然验证不通过其实获取不到参数值
+        Date responseTime = (Date) map.get("responseTime");
+        getLogVoRequest(responseTime, qNode, logVo, request);
+        if (StringUtil.isNullOrEmpty(logVo.getAccount())) {
+            String employee = AnonymizeUtils.getEmployee(qNode.getAccount());
+            logVo.setAccount(accountHolder.get(employee));
+
+        }
+    }
+
+    private void loadPersonInfo(String key, QualificationsLogVO logVo) {
+        personInfos.forEach(personInfo -> {
+            if (personInfo.getEmployeeNumber().equalsIgnoreCase(key)) {
+                logVo.setName(personInfo.getChineseName());
+                logVo.setDept(personInfo.getDeptFullName());
+                logVo.setAccount(personInfo.getDomainAccount());
+            }
+        });
+    }
+
+    private void getLogVoCommon(Long costTime, String errorMsg, String singleCode, StringJoiner subDes,
+        QualificationsLogVO logVo) {
+        logVo.setAccountResultMessage(singleCode);
+        logVo.setResultDescription(("0".equals(singleCode)) ? subDes.toString() : "");
+        logVo.setErrorDescription(errorMsg);
+        logVo.setCostTime(costTime);
+        Date invokeTime = (Date) map.get("invokeTime");
+        logVo.setInvokeTime(invokeTime);
+    }
+
+    private void getLogVoRequest(Date responseTime, QualificationsResponse qNode, QualificationsLogVO logVo,
+        QualificationsRequest request) {
+        logVo.setResponseTime(responseTime);
+        logVo.setScenario(qNode.getScenario());
+        logVo.setSystemId(request.getSystemId());
+        String appId = request.getAppId();
+        if (!StringUtil.isNullOrEmpty(appId)) {
+            appId = appId.substring(0, request.getAppId().length() > 1000 ? 1000 : request.getAppId().length());
+        }
+        logVo.setAppId(appId);
+        logVo.setArea(request.getArea());
+        logVo.setUserAccount(request.getUserW3());
+    }
+}
