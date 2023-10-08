@@ -1,0 +1,44 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications.bean;
+
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * @author pWX814460
+ * @description Ilearning接口响应实体
+ * @since 2020/11/26 11:32
+ */
+@Data
+public class ExamResponse {
+
+    private int total;
+
+    private List<ExamInfo> records;
+
+    /**
+     * ilearning接口返回的结果封装
+     */
+    @Data
+    public class ExamInfo {
+        private String examCode;
+
+        private String examResultId;
+
+        private String w3Account;
+
+        private String examScore;
+
+        private String startTime;
+
+        private String endTime;
+
+        private String examID;
+
+        private String isPass;
+    }
+}
