@@ -1,0 +1,253 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications.rule;
+
+import com.huawei.it.jalor5.core.util.CollectionUtil;
+import com.huawei.it.occsafe.common.AnonymizeUtils;
+import com.huawei.it.occsafe.dao.qualification.ITrustListDao;
+import com.huawei.it.occsafe.job.CurrentContextAdder;
+import com.huawei.it.occsafe.service.impl.plugin.PluginLoader;
+import com.huawei.it.occsafe.service.impl.plugin.WorkNoPlugin;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.ExecuteRequest;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QualificationsResponse;
+import com.huawei.it.occsafe.service.impl.qualifications.bean.QueryRuleContext;
+import com.huawei.it.occsafe.service.impl.qualifications.enums.ExecuteEnum;
+import com.huawei.it.occsafe.service.plugin.IPlugin;
+import com.huawei.it.occsafe.service.qualifications.IQualificationRuleExecutor;
+import com.huawei.it.occsafe.service.qualifications.validate.IValidator;
+import com.huawei.it.occsafe.util.LogUtil;
+import com.huawei.it.occsafe.util.StringUtil;
+
+import org.apache.commons.collections.CollectionUtils;
+
+import javax.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * @author pWX814460
+ * @description 主要是提供response方法
+ * @since 2020/11/3 15:42
+ */
+public abstract class AbstractQualificationRuleExecutor extends CurrentContextAdder
+    implements IQualificationRuleExecutor, IValidator {
+    // 白名单类型
+    protected String whiteListType;
+
+    // 备案工号集合
+    protected List<String> filingWorkNoList;
+
+    @Inject
+    private ITrustListDao trustListDao;
+
+    /**
+     * 执行之前准备阶段
+     */
+    protected void beforeExecute() {
+        whiteListType = "";
+    }
+
+    /**
+     * execute
+     *
+     * @param ctx 参数
+     * @return 结果
+     */
+    @Override
+    public List<QualificationsResponse> execute(QueryRuleContext ctx) {
+        beforeExecute();
+        String classname = this.getClass().getName();
+        LogUtil.info("--------start " + classname + " execute--------");
+        List<String> rulelist = ctx.getRulelist();
+        // 白名单备案场景
+        List<String> scenarios = Collections.unmodifiableList(Arrays.asList(whiteListType));
+        // 已备案的工号
+        filingWorkNoList = validate(new ArrayList<>(rulelist), scenarios);
+        // 未备案人员工号
+        List<String> notFilingWorkNoListWithNew = com.huawei.it.occsafe.util.StringUtil.removeSimilarList(
+            new ArrayList<>(rulelist), filingWorkNoList);
+        // 新进员工
+        List<String> newMemberList = ctx.getOrginRequest().getAccessMember();
+        // 所有未备案的员工晒出掉新进员工
+        List<String> notFilingWorkNoList = com.huawei.it.occsafe.util.StringUtil.removeSimilarList(
+            notFilingWorkNoListWithNew, newMemberList);
+        if (CollectionUtils.isEmpty(notFilingWorkNoList)) {
+            return response(
+                new ExecuteRequest(Collections.EMPTY_LIST, notFilingWorkNoList, filingWorkNoList, newMemberList,
+                    ctx.getScenario(), null, validateChangedPerson(ctx), whiteListType));
+        }
+        List<String> notPassList = new ArrayList<>();
+        // 排除掉所有特殊通道的工号以后 需要检查的工号
+        List<String> checkList = StringUtil.removeSimilarList(notFilingWorkNoList, newMemberList);
+        if (CollectionUtils.isEmpty(checkList)) {
+            return response(
+                new ExecuteRequest(notPassList, checkList, filingWorkNoList, newMemberList, ctx.getScenario(), null,
+                    validateChangedPerson(ctx), whiteListType));
+        }
+        // 因为两种数据源可能会有重复数据，需要去重
+        Map<String, Object> workNosAdaptMap = getPluginAndDo(checkList);
+        // 新旧工号
+        Set<String> newAddOldList = (Set<String>) workNosAdaptMap.get("newAddOldList");
+        List<String> collect ;
+        if (CollectionUtil.isNullOrEmpty(newAddOldList)) {
+            collect = checkList;
+        } else {
+            collect = doExecute(new ArrayList<>(newAddOldList));
+        }
+        // res 将旧工号违规记录替换成新工号，并且去重
+        LogUtil.info("--------end " + classname + " execute--------");
+        notPassList = ((WorkNoPlugin) getPlugin()).pluginDoResponseAdapt(collect, workNosAdaptMap);
+        return response(
+            new ExecuteRequest(notPassList, checkList, filingWorkNoList, newMemberList, ctx.getScenario(), null,
+                validateChangedPerson(ctx), whiteListType));
+    }
+
+    @Override
+    public List<QualificationsResponse> response(ExecuteRequest request) {
+        List<QualificationsResponse> response = new ArrayList<>();
+        String msg = ExecuteEnum.getDes(getClass().getCanonicalName());
+        // 返回未通过的响应
+        List<String> notPassList = request.getNotPassList();
+        // 返回所有已备案的
+        List<String> whiteList = request.getWhiteList();
+        // 新进华为人员不超过三天的直接通过处理
+        List<String> newMemberList = request.getNewMemberList();
+        Map<String, Long> expireDatePromptMap = request.getExpireDatePromptMap();
+        Map<String, Long> singnMap = request.getSecuritySigningExpireMap();
+        Map<String, String> changedPersoMap = request.getChangedPersoMap();
+        String requestWhiteListType = request.getWhiteListType();
+        String scenario = request.getScenario();
+        if (!CollectionUtils.isEmpty(notPassList)) {
+            notPassList.forEach(account -> {
+                QualificationsResponse res = createResponse(null,null, changedPersoMap, scenario, account, false);
+                res.setMessage(msg);
+                response.add(res);
+            });
+        }
+        // 返回满足的响应
+        List<String> passList = StringUtil.removeSimilarList(request.getCheckList(), notPassList);
+        if (!CollectionUtils.isEmpty(passList)) {
+            passList.forEach(account -> {
+                QualificationsResponse res = createResponse(expireDatePromptMap, singnMap, changedPersoMap, scenario, account,
+                    true);
+                response.add(res);
+            });
+        }
+        if (!CollectionUtils.isEmpty(whiteList)) {
+            whiteList.forEach(account -> {
+                QualificationsResponse res = createResponse(expireDatePromptMap, singnMap, changedPersoMap, scenario, account,
+                    true);
+                if (!com.huawei.it.jalor5.core.util.StringUtil.isNullOrEmpty(requestWhiteListType)) {
+                    res.setWhiteListType(requestWhiteListType);
+                }
+                response.add(res);
+            });
+        }
+        if (!CollectionUtils.isEmpty(newMemberList)) {
+            newMemberList.forEach(account -> {
+                QualificationsResponse res = createResponse(expireDatePromptMap, singnMap, changedPersoMap, scenario, account,
+                    true);
+                res.setNewMwmber(true);
+                response.add(res);
+            });
+        }
+        return response;
+    }
+
+    private QualificationsResponse createResponse(Map<String, Long> expireDatePromptMap,Map<String, Long> securitySigningExpireMap,
+        Map<String, String> changedPersoMap, String scenario, String account, boolean flag) {
+        QualificationsResponse res = new QualificationsResponse();
+        res.setScenario(scenario);
+        res.setAccount(AnonymizeUtils.getEmployee(account));
+        res.setFlag(flag);
+        if (changedPersoMap != null) {
+            res.setIsChangedPerson(changedPersoMap.get(account));
+        }
+        if (!CollectionUtil.isNullOrEmpty(expireDatePromptMap)) {
+            res.setExpireDay(
+                expireDatePromptMap.get(account) == null ? "0" : expireDatePromptMap.get(account).toString());
+        }
+        if (!CollectionUtil.isNullOrEmpty(securitySigningExpireMap)) {
+            res.setSecurityExpireDay(
+                securitySigningExpireMap.get(account) == null ? "0" : securitySigningExpireMap.get(account).toString());
+        }
+        return res;
+    }
+
+    @Override
+    public List<String> doExecute(List<String> ruleList, Map map, Map<String, Long> expireDatePromptMap, Map<String, Long> w3cExpireDatePromptMap) {
+        return new ArrayList<>();
+    }
+
+    /**
+     * 返回备案人员工号
+     *
+     * @param list 工号列表
+     * @param scenarios 场景
+     * @return 验证结果
+     */
+    @Override
+    public List<String> validate(List<String> list, List<String> scenarios) {
+        scenarios = scenarios.stream().filter(item -> {
+            return !"".equals(item);
+        }).collect(Collectors.toList());
+        List<Map<String, Object>> returnAccounts = null;
+        if (!CollectionUtil.isNullOrEmpty(scenarios)) {
+            LogUtil.info("AbstractQualificationRuleExecutor::白名单场景::"+scenarios);
+            returnAccounts = trustListDao.findTrustList(list, scenarios);
+        }
+        List<String> filingAccounts = new ArrayList<>();
+        if (CollectionUtils.isNotEmpty(returnAccounts)) {
+            filingAccounts = returnAccounts.stream()
+                .map(rac -> (String) rac.get("trustPerson"))
+                .collect(Collectors.toList());
+        }
+        // 返回备案名单人员
+        LogUtil.info("AbstractQualificationRuleExecutor::备案名单人员::"+filingAccounts);
+        return filingAccounts;
+    }
+
+    /**
+     * 获取插件
+     *
+     * @return 响应插件
+     */
+    protected IPlugin getPlugin() {
+        // 可以优化成获取多个插件
+        return PluginLoader.getPlugin(0);
+    }
+
+    /**
+     * 获取并执行插件
+     *
+     * @param list 请求参数
+     * @return 响应
+     */
+    protected Map getPluginAndDo(List<String> list) {
+        // 获取新旧工号处理插件
+        WorkNoPlugin plugin = (WorkNoPlugin) getPlugin();
+        // 根据新工号获取旧工号， 并且存储新旧工号的映射关系
+        return (Map<String, Object>) plugin.pluginDo(list);
+    }
+
+    protected Map<String, String> validateChangedPerson(QueryRuleContext ctx) {
+        Map<String, String> changedMap = new HashMap<>();
+        List<String> changePersons = ctx.getOrginRequest().getChangePersons();
+        if (CollectionUtils.isEmpty(changePersons)) {
+            return changedMap;
+        }
+        changePersons.stream().forEach(changedPeroson -> {
+            changedMap.put(AnonymizeUtils.getEmployee(changedPeroson), changedPeroson);
+        });
+        return changedMap;
+    }
+}
