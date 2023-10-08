@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2020. All rights reserved.
+ */
+
+package com.huawei.it.occsafe.service.impl.qualifications;
+
+import com.huawei.it.occsafe.service.qualifications.IQualificationAfter;
+import com.huawei.it.occsafe.service.qualifications.IQualificationBefore;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
+/**
+ * @author pWX814460
+ * @description SimpleQualificationQuery
+ * @since 2020/11/3 15:13
+ */
+@Service
+public class SimpleQualificationQuery extends AbstractQualificationQuery {
+
+    /**
+     * simpleQualificationBefore
+     */
+    @Autowired
+    @Qualifier("simpleQualificationBefore")
+    protected IQualificationBefore simpleQualificationBefore;
+
+    @Autowired
+    @Qualifier("simpleQualificationAfter")
+    protected IQualificationAfter simpleQualificationAfter;
+
+    @Override
+    protected IQualificationBefore loadQualificationBefore() {
+        return simpleQualificationBefore;
+    }
+
+    @Override
+    protected IQualificationAfter loadQualificationAfter() {
+        return simpleQualificationAfter;
+    }
+}
