@@ -1,3 +1,6 @@
+<--！ IT人员档案页面 --->
+
+
 <template>
   <div>
     <scPageContainer style="width: 100%;float:left" v-show="flag" title="IT人员档案">
