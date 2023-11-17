@@ -1,531 +1,738 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.huawei.it.occsafe.dao.admonitor.IAdminMonitoringDao">
-    <resultMap id="adminMonitoring" type="com.huawei.it.occsafe.vo.adminmonitor.AdminMonitoringVO">
+<mapper namespace="com.huawei.it.occsafe.dao.security.ISecurityTrainDao">
+    <resultMap id="securityTrain" type="com.huawei.it.occsafe.vo.security.SecurityTrainVO">
         <result column="ID" property="id"/>
-        <result column="WARNING_ID" property="warningId"/>
-        <result column="WARNING_TYPE" property="warningType"/>
-        <result column="WARNING_LEVEL" property="warningLevel"/>
-        <result column="WARNING_TIME" property="warningTime"/>
-        <result column="WARNING_INFO" property="warningInfo"/>
-        <result column="DEALER" property="dealer"/>
-        <result column="STATUS" property="status"/>
-        <result column="OP_SOURCE" property="opSource"/>
-        <result column="CREATER" property="createBy"/>
-        <result column="CREATER_TIME" property="createTime"/>
-        <result column="LAST_UPDATE_USER" property="lastUpdateBy"/>
+        <result column="NAME" property="name"/>
+        <result column="EMPLOYEE_ID" property="employeeId"/>
+        <result column="w3_account" property="w3Account"/>
+        <result column="DEPT" property="dept"/>
+        <result column="DOMAIN" property="domain"/>
+        <result column="LEARNING_METHOD" property="learningMethod"/>
+        <result column="TRAIN_DATE" property="trainDate"/>
+        <result column="IS_TRAINING" property="isTraining"/>
+        <result column="OPERATOR" property="operator"/>
+        <result column="OPERATE_TIME" property="operateTime"/>
+        <result column="LAST_UPDATE_PERSON" property="lastUpdatePerson"/>
         <result column="LAST_UPDATE_TIME" property="lastUpdateTime"/>
-        <result column="DELETE_FLG" property="deleteFlag"/>
-        <result column="warning_mode" property="warningMode"/>
-        <result column="occurrence_time" property="occurrenceTime"/>
-        <result column="enter_lake_time" property="enterLakeTime"/>
-        <result column="remark" property="remark"/>
-        <result column="PROCESS_BY" property="processBy"/>
-        <result column="FALSE_REASON" property="falseReason"/>
-        <result column="DELETE_REASON" property="deleteReason"/>
-        <result column="TRACKING_TIME" property="trackingTime"/>
-        <result column="COMPLETED_TIME" property="completedTime"/>
-        <result column="CLASS" property="classType"/>
-        <result column="analyse_log" property="analyseLog"/>
-        <result column="warning_info_full" property="warningInfoFull"/>
-        <result column="risk_scenario" property="riskScenario"/>
-        <result column="fast_offline" property="fastOffline"/>
-        <result column="has_support_2" property="hasSupport2"/>
-        <result column="support_person_2" property="supportPerson2"/>
-        <result column="priority" property="priority"/>
-        <result column="monitor_type" property="monitorType"/>
-        <result column="check_person" property="checkPerson"/>
-        <result column="check_time" property="checkTime"/>
-        <result column="prevent_time" property="preventTime"/>
+        <result column="ATTACHMENT_NAME" property="attachmentName"/>
+        <result column="REMARK" property="remark"/>
+        <result column="employedDate" property="employedDate"/>
+        <result column="personType" property="personType"/>
+        <result column="is_train_this_year" property="isTrainThisYear"/>
+        <result column="is_train_last_year" property="isTrainLastYear"/>
+        <result column="latest_train_date" property="latestTrainDate"/>
+        <result column="latest_train_day" property="latestTrainDay"/>
+        <result column="train_organ" property="trainOrgan"/>
+        <result column="uuid" property="uuid"/>
+        <result column="train_user_id" property="trainUserId"/>
+        <result column="latest_exam_date" property="latestExamDate"/>
     </resultMap>
-    <sql id="getModal">
-        select distinct (english_code),class,model_type,chinese_code,risk_scenario,maintenance_owner from t_ispp_monitor_model t where t.delete_flag='1'
+
+    <sql id="popQueryCondition">
+        <foreach collection="vos" open="and LOWER(t.EMPLOYEE_ID) in (" item="item" separator=","
+          close=")">
+            LOWER(#{item.employeeId,jdbcType=VARCHAR})
+        </foreach>
     </sql>
 
-    <sql id="getDistinctModal">
-        select distinct english_code from t_ispp_monitor_model t where t.delete_flag='1'
+    <sql id="queryCondition">
+        <if test='vo.operator != null and vo.operator !=""'>
+            and (
+            LOWER(t.OPERATOR) like concat(concat('%', LOWER(#{vo.operator,jdbcType=VARCHAR})),'%') or
+            LOWER(t.LAST_UPDATE_PERSON) like concat(concat('%', LOWER(#{vo.operator,jdbcType=VARCHAR})),'%')
+            )
+        </if>
+        <if test='vo.trainOrgan != null and vo.trainOrgan !=""'>
+            and t.train_organ = #{vo.trainOrgan,jdbcType=VARCHAR}
+        </if>
+        <if test='vo.name != null and vo.name !=""'>
+            and LOWER(t.NAME) like concat(concat('%', LOWER(#{vo.name,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.userName != null and vo.userName !=""'>
+            and LOWER(t.NAME) like concat(concat('%', LOWER(#{vo.userName,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.workNumberList != null and vo.workNumberList.size()>0'>
+            <foreach collection="vo.workNumberList" open="and LOWER(t.employee_id) in (" item="item" separator=","
+              close=")">
+                LOWER(#{item,jdbcType=VARCHAR})
+            </foreach>
+        </if>
+        <if test='vo.dept != null and vo.dept !=""'>
+            and LOWER(t.DEPT) like concat(concat('%', LOWER(#{vo.dept,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.learningMethod != null and vo.learningMethod !=""'>
+            and LOWER(t.LEARNING_METHOD) like concat(concat('%', LOWER(#{vo.learningMethod,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.domain != null and vo.domain !=""'>
+            and LOWER(t.DOMAIN) like concat(concat('%', LOWER(#{vo.domain,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.domain != null and vo.domain !=""'>
+            and LOWER(t.TRAIN_DATE) like concat(concat('%', LOWER(#{vo.domain,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.trainStartTime != null and vo.trainStartTime !="" and vo.trainEndTime != null and vo.trainEndTime !="" '>
+            and t.TRAIN_DATE between str_to_date(#{vo.trainStartTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s') and
+            str_to_date(#{vo.trainEndTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test='vo.operateStartTime != null and vo.operateStartTime !="" and vo.operateEndTime != null and vo.operateEndTime !="" '>
+            and t.OPERATE_TIME between str_to_date(#{vo.operateStartTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s') and
+            str_to_date(#{vo.operateEndTime,jdbcType=VARCHAR},'%Y-%m-%d %H:%i:%s')
+        </if>
     </sql>
-    <sql id="selectAll">
-        select t.ID,
-            t.WARNING_ID,
-            t.WARNING_TYPE,
-            t.WARNING_LEVEL,
-            t.WARNING_TIME,
-            t.WARNING_INFO,
-            t.warning_info_full,
-            t.DEALER,
-            t.STATUS,
-            t.OP_SOURCE,
-            t.CREATER,
-            t.CREATER_TIME,
-            t.LAST_UPDATE_USER,
-            t.LAST_UPDATE_TIME,
-            t.DELETE_FLG,
-            t.warning_mode,
-            t.occurrence_time,
-            t.enter_lake_time,
+
+    <sql id="selectTOccHrSecurityTrain">
+        SELECT
+            t.id,
+            t.`name`,
+            t.employee_id,
+            t.dept,
+            t.domain,
+            t.learning_method,
+            t.train_date,
+            t.is_training,
+            t.operator,
+            t.operate_time,
+            t.last_update_person,
+            t.last_update_time,
+            t.delete_flag,
+            t.attachment_name,
             t.remark,
-            t.PROCESS_BY,
-            t.FALSE_REASON,
-            t.TRACKING_TIME,
-            t.COMPLETED_TIME,
-            t.support_person_2,
-            t.priority,
-            t.monitor_type,
-            t.check_person,
-            t.check_time,
-            (select t1.class from (<include refid="getModal"/>) t1 where t.WARNING_TYPE = t1.english_code) class,
-            t.analyse_log
-        from t_occ_hr_itadminmonitoring t
+            t.train_organ,
+            t.uuid
+        FROM
+            t_occ_hr_security_train t
     </sql>
-    <sql id="selectCols">
-        select t.ID,
-            t.prevent_time,
-            t.WARNING_ID,
-            t.WARNING_TYPE,
-            t.WARNING_LEVEL,
-            t.WARNING_TIME,
-            t.WARNING_INFO,
-            t.DEALER,
-            t.STATUS,
-            t.OP_SOURCE,
-            t.CREATER,
-            t.CREATER_TIME,
-            t.LAST_UPDATE_USER,
-            t.LAST_UPDATE_TIME,
-            t.DELETE_FLG,
-            t.warning_mode,
-            t.occurrence_time,
-            t.enter_lake_time,
-            t.remark,
-            t.PROCESS_BY,
-            t.FALSE_REASON,
-            t.DELETE_REASON,
-            t.TRACKING_TIME,
-            t.COMPLETED_TIME,
-            t.fast_offline,
-            t.support_person_2,
-            t.priority,
-            t.monitor_type,
-            t.check_person,
-            t.check_time,
-            t1.risk_scenario,
-            t1.maintenance_owner as maintenanceOwner,
-            (select t1.class from (<include refid="getModal"/>
-              <if test='vo != null'>
-	              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
-	                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
-	              </if>
-              </if>) t1 where t.WARNING_TYPE = t1.english_code) class
-        from t_occ_hr_itadminmonitoring t
-        join (<include refid="getModal"/>
-              <if test='vo != null'>
-	              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
-	                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
-	              </if>
-              </if>) t1 on t.WARNING_TYPE = t1.english_code
+
+    <select id="findList" resultMap="securityTrain">
+        <include refid="selectTOccHrSecurityTrain"/> where t.DELETE_FLAG = 'N'
+        <if test='vo != null'>
+            <include refid="queryCondition"/>
+        </if>
+        order by t.LAST_UPDATE_TIME desc
+        limit #{page.mysqlStartIndex},#{page.pageSize}
+    </select>
+
+    <select id="findListCount" resultType="int">
+        select count(1) from t_occ_hr_security_train t where t.DELETE_FLAG = 'N'
+        <if test='vo != null'>
+            <include refid="queryCondition"/>
+        </if>
+    </select>
+
+    <select id="queryList" resultMap="securityTrain">
+        <include refid="selectTOccHrSecurityTrain"/> where t.DELETE_FLAG = 'N'
+        <if test='vos != null and vos.size()>0'>
+            <include refid="popQueryCondition"/>
+        </if>
+        order by t.train_date desc
+        limit #{page.mysqlStartIndex},#{page.pageSize}
+    </select>
+
+    <select id="queryListCount" resultType="int">
+        select count(1) from t_occ_hr_security_train t where t.DELETE_FLAG = 'N'
+        <if test='vos != null and vos.size()>0'>
+            <include refid="popQueryCondition"/>
+        </if>
+    </select>
+
+    <update id="batchUpdate">
+        <if test='vos != null and vos.size()>0'>
+            <foreach collection="vos" item="vo" close=";" separator=";">
+                UPDATE t_occ_hr_security_train set
+                <if test='vo.learningMethod != null'>
+                    LEARNING_METHOD = #{vo.learningMethod,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.isTraining != null'>
+                    IS_TRAINING = #{vo.isTraining,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.trainDate != null'>
+                    TRAIN_DATE = #{vo.trainDate},
+                </if>
+                <if test='vo.trainOrgan != null'>
+                    TRAIN_ORGAN = #{vo.trainOrgan,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.lastUpdatePerson != null '>
+                    LAST_UPDATE_PERSON = #{vo.lastUpdatePerson,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.attachmentName != null '>
+                    ATTACHMENT_NAME = #{vo.attachmentName,jdbcType=VARCHAR},
+                </if>
+                <if test='vo.remark != null'>
+                    REMARK = #{vo.remark},
+                </if>
+                LAST_UPDATE_TIME = sysdate()
+                where ID = #{vo.id}
+            </foreach>
+        </if>
+    </update>
+
+    <insert id="batchSave">
+        <if test='vos != null and vos.size()>0'>
+            INSERT into t_occ_hr_security_train
+            (
+            id,
+            EMPLOYEE_ID,
+            NAME,
+            DEPT,
+            DOMAIN,
+            TRAIN_ORGAN,
+            LEARNING_METHOD,
+            IS_TRAINING,
+            TRAIN_DATE,
+            ATTACHMENT_NAME,
+            REMARK,
+            OPERATOR,
+            OPERATE_TIME,
+            LAST_UPDATE_PERSON,
+            LAST_UPDATE_TIME,
+            DELETE_FLAG,
+            uuid,
+            train_user_id
+            )  values
+            <foreach collection="vos" item="vo" index="index" separator=",">
+                ( #{vo.id,jdbcType=NUMERIC},
+                #{vo.employeeId,jdbcType=VARCHAR},
+                #{vo.name,jdbcType=VARCHAR},
+                #{vo.dept,jdbcType=VARCHAR},
+                #{vo.domain,jdbcType=VARCHAR},
+                #{vo.trainOrgan,jdbcType=VARCHAR},
+                #{vo.learningMethod,jdbcType=VARCHAR},
+                #{vo.isTraining,jdbcType=VARCHAR},
+                #{vo.trainDate},
+                #{vo.attachmentName,jdbcType=VARCHAR},
+                #{vo.remark,jdbcType=VARCHAR},
+                #{vo.operator,jdbcType=VARCHAR},
+                sysdate(),
+                #{vo.operator,jdbcType=VARCHAR},
+                sysdate(),
+                'N',
+                #{vo.uuid,jdbcType=VARCHAR},
+                #{vo.trainUserId,jdbcType=VARCHAR}
+                )
+            </foreach>
+            on duplicate key update
+            EMPLOYEE_ID = values(EMPLOYEE_ID),
+            name = values(name),
+            dept = values(dept),
+            domain = values(domain),
+            TRAIN_ORGAN = values(TRAIN_ORGAN),
+            LEARNING_METHOD =values(LEARNING_METHOD),
+            IS_TRAINING = values(IS_TRAINING),
+            TRAIN_DATE= values(TRAIN_DATE),
+            ATTACHMENT_NAME= values(ATTACHMENT_NAME),
+            REMARK=values(REMARK),
+            OPERATOR=values(OPERATOR),
+            OPERATE_TIME=values(OPERATE_TIME),
+            LAST_UPDATE_PERSON=values(LAST_UPDATE_PERSON),
+            uuid=values(uuid),
+            LAST_UPDATE_TIME = sysdate(),
+            DELETE_FLAG='N'
+        </if>
+    </insert>
+
+    <update id="deleteOne">
+        update t_occ_hr_security_train set DELETE_FLAG='Y' where ID = #{vo.id}
+    </update>
+
+    <select id="findSecurityTrainRecordsList" resultMap="securityTrain">
+        select uuid, w3_account, employee_id, name, personType, dept, employedDate,latest_train_date,is_train_last_year,is_train_this_year, latest_train_day, latest_exam_date  from (
+        SELECT
+        t1.w3_account,
+        t1.uuid,
+        t1.employee_id,
+        t1.name,
+        t1.personType,
+        t1.dept,
+        t1.employedDate,
+        t2.train_date  AS latest_train_date,
+        case
+        when t2.last_year_train > 0
+        then '是' else '否' end as is_train_last_year,
+        case
+        when t2.this_year_train > 0
+        then '是' else '否' end as is_train_this_year,
+        case
+        when (t2.latest_train_day !='' or t2.latest_train_day is not null)
+        then t2.latest_train_day else 0 end as latest_train_day,
+        t4.exam_date  AS latest_exam_date from
+        (
+        select
+        SUBSTR( t.original_enter_date, 1, 10 ) AS employedDate,
+        t.person_work_status AS personType,
+        t.employee_number AS employee_id,
+        t.domain_account AS w3_account,
+        t.chinese_name AS NAME,
+        t.dept_full_name AS dept,
+        t.uuid
+        FROM BASE_PERSON_INFO_DISTRIBUTION t
+        where 1 = 1 and employed_flag='1'
+        <if test='vo != null'>
+            <include refid="queryBpid"/>
+        </if>
+        ) t1
+        left join
+        (
+        SELECT
+        a.train_user_id,
+        max(if(a.is_training='1',a.train_date,'1970-01-01 00:00:00')) AS train_date,
+        sum(case when is_training ='1' <![CDATA[ and a.train_date >= #{vo.lastYearStartDate} and a.train_date <= #{vo.lastYearEndDate} ]]> then 1 else 0 end ) as last_year_train,
+        sum(case when is_training ='1'   <![CDATA[ and a.train_date >= #{vo.thisYearStartDate} and a.train_date <= #{vo.thisYearEndDate} ]]> then 1 else 0 end ) as this_year_train,
+        min(if(a.is_training='1',TIMESTAMPDIFF(day,train_date,sysdate()),36500)) as latest_train_day
+        FROM
+        T_OCC_HR_SECURITY_TRAIN a
+        WHERE
+        a.delete_flag = 'N'
+        GROUP BY
+        a.train_user_id
+        ) t2 on t1.uuid = t2.train_user_id
+        left join (
+        select
+        t3.uuid,
+        max( t3.end_time ) AS exam_date
+        from t_occ_hr_itexam_record t3 where t3.is_pass ='1'
+        GROUP BY t3.uuid
+        ) t4 on t1.uuid = t4.uuid
+        ) t5 where 1 = 1
+        <if test='vo != null'>
+            <include refid="queryExam"/>
+        </if>
+        <if test='vo != null'>
+            <include refid="queryTrain"/>
+        </if>
+        order by t5.employee_id asc
+    </select>
+
+    <select id="findSecurityTrainRecordsPageList" resultMap="securityTrain">
+        select uuid, w3_account, employee_id, name, personType, dept, employedDate,latest_train_date,is_train_last_year,is_train_this_year, latest_train_day, latest_exam_date  from (
+        SELECT
+        t1.w3_account,
+        t1.uuid,
+        t1.employee_id,
+        t1.name,
+        t1.personType,
+        t1.dept,
+        t1.employedDate,
+        t2.train_date  AS latest_train_date,
+        case
+        when t2.last_year_train > 0
+        then '是' else '否' end as is_train_last_year,
+        case
+        when t2.this_year_train > 0
+        then '是' else '否' end as is_train_this_year,
+        case
+        when (t2.latest_train_day !='' or t2.latest_train_day is not null)
+        then t2.latest_train_day else 0 end as latest_train_day,
+        t4.exam_date  AS latest_exam_date from
+        (
+        select
+        SUBSTR( t.original_enter_date, 1, 10 ) AS employedDate,
+        t.person_work_status AS personType,
+        t.employee_number AS employee_id,
+        t.domain_account AS w3_account,
+        t.chinese_name AS NAME,
+        t.dept_full_name AS dept,
+        t.uuid
+        FROM BASE_PERSON_INFO_DISTRIBUTION t
+        where 1 = 1 and employed_flag='1'
+        <if test='vo != null'>
+            <include refid="queryBpid"/>
+        </if>
+        ) t1
+        left join
+        (
+        SELECT
+        a.train_user_id,
+        max(if(a.is_training='1',a.train_date,'1970-01-01 00:00:00')) AS train_date,
+        sum(case when is_training ='1' <![CDATA[ and a.train_date >= #{vo.lastYearStartDate} and a.train_date <= #{vo.lastYearEndDate} ]]> then 1 else 0 end ) as last_year_train,
+        sum(case when is_training ='1'   <![CDATA[ and a.train_date >= #{vo.thisYearStartDate} and a.train_date <= #{vo.thisYearEndDate} ]]> then 1 else 0 end ) as this_year_train,
+        min(if(a.is_training='1',TIMESTAMPDIFF(day,train_date,sysdate()),36500)) as latest_train_day
+        FROM
+        T_OCC_HR_SECURITY_TRAIN a
+        WHERE
+        a.delete_flag = 'N'
+        GROUP BY
+        a.train_user_id
+        ) t2 on t1.uuid = t2.train_user_id
+        left join (
+        select
+        t3.uuid,
+        max( t3.end_time ) AS exam_date
+        from t_occ_hr_itexam_record t3 where t3.is_pass ='1'
+        GROUP BY t3.uuid
+        ) t4 on t1.uuid = t4.uuid
+        ) t5 where 1 = 1
+        <if test='vo != null'>
+            <include refid="queryExam"/>
+        </if>
+        <if test='vo != null'>
+            <include refid="queryTrain"/>
+        </if>
+        order by t5.latest_train_date desc
+        limit #{page.mysqlStartIndex},#{page.pageSize}
+    </select>
+    <!-- 查询 -->
+    <select id="findSecurityTrainRecordsPageListCount" resultType="int">
+        select count(*) from (
+        select uuid, w3_account, employee_id, name, personType, dept, employedDate,latest_train_date,is_train_last_year,is_train_this_year, latest_train_day, latest_exam_date  from (
+        SELECT
+        t1.w3_account,
+        t1.uuid,
+        t1.employee_id,
+        t1.name,
+        t1.personType,
+        t1.dept,
+        t1.employedDate,
+        t2.train_date AS latest_train_date,
+        case
+        when t2.last_year_train > 0
+        then '是' else '否' end as is_train_last_year,
+        case
+        when t2.this_year_train > 0
+        then '是' else '否' end as is_train_this_year,
+        case
+        when (t2.latest_train_day !='' or t2.latest_train_day is not null)
+        then t2.latest_train_day else 0 end as latest_train_day,
+        t4.exam_date AS latest_exam_date from
+        (
+        select
+        SUBSTR( t.original_enter_date, 1, 10 ) AS employedDate,
+        t.person_work_status AS personType,
+        t.employee_number AS employee_id,
+        t.domain_account AS w3_account,
+        t.chinese_name AS NAME,
+        t.dept_full_name AS dept,
+        t.uuid
+        FROM BASE_PERSON_INFO_DISTRIBUTION t
+        where 1 = 1 and employed_flag='1'
+        <if test='vo != null'>
+            <include refid="queryBpid"/>
+        </if>
+        ) t1
+        left join
+        (
+        SELECT
+        a.train_user_id,
+        max(if(a.is_training='1',a.train_date,'1970-01-01 00:00:00')) AS train_date,
+        sum(case when is_training ='1' <![CDATA[ and a.train_date >= #{vo.lastYearStartDate} and a.train_date <= #{vo.lastYearEndDate} ]]> then 1 else 0 end ) as last_year_train,
+        sum(case when is_training ='1'   <![CDATA[ and a.train_date >= #{vo.thisYearStartDate} and a.train_date <= #{vo.thisYearEndDate} ]]> then 1 else 0 end ) as this_year_train,
+        min(if(a.is_training='1',TIMESTAMPDIFF(day,train_date,sysdate()),36500)) as latest_train_day
+        FROM
+        T_OCC_HR_SECURITY_TRAIN a
+        WHERE
+        a.delete_flag = 'N'
+        GROUP BY
+        a.train_user_id
+        ) t2 on t1.uuid = t2.train_user_id
+        left join (
+        select
+        t3.uuid,
+        max( t3.end_time ) AS exam_date
+        from t_occ_hr_itexam_record t3 where t3.is_pass ='1' GROUP BY t3.uuid
+        ) t4 on t1.uuid = t4.uuid
+        ) t5 where 1 = 1
+        <if test='vo != null'>
+            <include refid="queryExam"/>
+        </if>
+        <if test='vo != null'>
+            <include refid="queryTrain"/>
+        </if>
+        ) b
+    </select>
+
+
+    <sql id="queryDay">
+        <if test='vo.latestTrainDay != null  and vo.latestTrainDaySelect != null and vo.latestTrainDaySelect !=""'>
+            and t2.latest_train_day ${vo.latestTrainDaySelect} #{vo.latestTrainDay}
+        </if>
     </sql>
-    <sql id="selectOffLineCols">
-        select t.ID,
-            t.prevent_time,
-            t.WARNING_ID,
-            t.WARNING_TYPE,
-            t.WARNING_LEVEL,
-            t.WARNING_TIME,
-            t.WARNING_INFO,
-            t.DEALER,
-            t.STATUS,
-            t.OP_SOURCE,
-            t.CREATER,
-            t.CREATER_TIME,
-            t.LAST_UPDATE_USER,
-            t.LAST_UPDATE_TIME,
-            t.DELETE_FLG,
-            t.warning_mode,
-            t.occurrence_time,
-            sysdate() as date2,
-            t.remark,
-            t.PROCESS_BY,
-            t.FALSE_REASON,
-            t.DELETE_REASON,
-            t.TRACKING_TIME,
-            t.COMPLETED_TIME,
-            t.fast_offline,
-            t.support_person_2,
-            t.priority,
-            t.monitor_type,
-            t.check_person,
-            t.check_time,
-            t1.risk_scenario,
-            t1.maintenance_owner as maintenanceOwner,
-            (select t1.class from (<include refid="getModal"/>
-                  <if test='vo != null'>
-		              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
-		                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
-		              </if>
-                  </if>) t1 where t.WARNING_TYPE = t1.english_code) class
-        from t_occ_hr_itadminmonitoring_offline t join (<include refid="getModal"/>
-	              <if test='vo != null'>
-		              <if test='vo.maintenanceOwner != null and vo.maintenanceOwner !=""'>
-		                AND LOWER(t.maintenance_owner) like concat('%', LOWER(#{vo.maintenanceOwner,jdbcType=VARCHAR}),'%')
-		              </if>
-	              </if>) t1 on t.WARNING_TYPE = t1.english_code
+
+    <sql id="queryDayClac">
+        <if test='vo.latestTrainDay != null  and vo.latestTrainDaySelect != null and vo.latestTrainDaySelect !=""'>
+            and latest_train_day ${vo.latestTrainDaySelect} #{vo.latestTrainDay}
+        </if>
     </sql>
 
     <sql id="query">
-        <if test='vo.dealer != null and vo.dealer !=""'>
-            and LOWER(t.DEALER) like concat(concat('%',LOWER(#{vo.dealer,jdbcType=VARCHAR})),'%')
-        </if>
-        <if test='vo.warningType != null and vo.warningType !=""'>
-            <foreach collection="vo.warningType.split(',')" open="and t.warning_type in (" item="item" separator=","
-                     close=")">
-                #{item}
-            </foreach>
-        </if>
-        <if test='vo.modelState != null and vo.modelState !=""'>
-            <if test='vo.modelState == "已上线"'>
-                and t.model_state  = #{vo.modelState,jdbcType=VARCHAR}
+        <if test='vo.personType != null and vo.personType !=""'>
+            <if test='vo.personType == "OTH"'>
+                and (LOWER(t.person_work_status) = 'OTH' or LOWER(t.person_work_status) = 'EX_OTH' or t.person_work_status ='' or person_work_status is null)
             </if>
-            <if test='vo.modelState == "未上线"'>
-                and (t.model_state  !='已上线' or t.model_state is null or model_state = '')
+            <if test='vo.personType == "EMP"'>
+                and (LOWER(t.person_work_status) = 'EMP' or LOWER(t.person_work_status) = 'EX_EMP')
             </if>
         </if>
-        <if test='vo.deleteFlag =="0".toString'>
-            AND T.DELETE_FLG = 'N'
+        <if test='vo.employedStartDate != null and vo.employedStartDate !=""'>
+            <![CDATA[
+				AND t.original_enter_date >= #{vo.employedStartDate}
+			]]>
         </if>
-        <if test='vo.monitorType !=null and vo.monitorType!=""'>
-            <foreach collection="vo.monitorType.split(',')" open="and t.monitor_type in (" item="item" separator=","
-                     close=")">
-                #{item}
+        <if test='vo.employedEndDate != null and vo.employedEndDate !=""'>
+            <![CDATA[
+				AND t.original_enter_date <= #{vo.employedEndDate}
+			]]>
+        </if>
+        <if test='vo.deptFirst != null and vo.deptFirst !=""'>
+            <foreach collection="vo.deptFirst.split(',')" open="and (t.dept_first like" item="item" separator="or t.dept_first like "
+              close=")">
+                concat(concat('%', LOWER(#{item,jdbcType=VARCHAR})),'%')
             </foreach>
         </if>
-        <if test='vo.id > 0'>
-            and t.ID = #{vo.id,jdbcType=DECIMAL}
+        <if test='vo.name != null and vo.name !=""'>
+            and LOWER(t.chinese_name) like concat(concat('%', LOWER(#{vo.name,jdbcType=VARCHAR})),'%')
         </if>
-        <if test='vo.warningId != null and vo.warningId !=""'>
-            and LOWER(t.WARNING_ID) like concat(concat('%',LOWER(#{vo.warningId,jdbcType=VARCHAR})),'%')
+        <if test='vo.userName != null and vo.userName !=""'>
+            and LOWER(t.chinese_name) like concat(concat('%', LOWER(#{vo.userName,jdbcType=VARCHAR})),'%')
         </if>
-        <if test='vo.supportPerson2 != null and vo.supportPerson2 !=""'>
-            <foreach collection="vo.supportPerson2.split(',')" open="and t.support_person_2 in (" item="item" separator=","
-                     close=")">
-                #{item}
-            </foreach>
+        <if test='vo.employeeId != null and vo.employeeId !=""'>
+            and t.employee_number like concat(UPPER(#{vo.employeeId,jdbcType=VARCHAR}),'%')
         </if>
-        <if test='vo.priority != null and vo.priority !="" and vo.priority =="高"'>
-            and t.priority  = #{vo.priority,jdbcType=VARCHAR}
+        <if test='vo.dept != null and vo.dept !=""'>
+            and LOWER(t.dept_full_name) like concat(concat('%', LOWER(#{vo.dept,jdbcType=VARCHAR})),'%')
         </if>
-        <if test='vo.status != null and vo.status !=""'>
-            <foreach collection="vo.status.split(',')" open="and t.STATUS in (" item="item" separator=","
-                     close=")">
-                #{item,jdbcType=VARCHAR}
-            </foreach>
+        <if test='vo.isTrainThisYear != null and vo.isTrainThisYear !=""'>
+            <if test='vo.isTrainThisYear == "Y"'>
+                and t6.this_year_train = 1
+            </if>
+            <if test='vo.isTrainThisYear == "N"'>
+                and (t6.this_year_train != 1 or t6.this_year_train is null)
+            </if>
         </if>
-        <if test='vo.deStatus != null and vo.deStatus !=""'>
-            <foreach collection="vo.deStatus.split(',')" open="and t.STATUS not in (" item="item" separator=","
-                     close=")">
-                #{item,jdbcType=VARCHAR}
-            </foreach>
+        <if test='vo.isTrainLastYear != null and vo.isTrainLastYear !=""'>
+            <if test='vo.isTrainLastYear == "Y"'>
+                and t4.last_year_train = 1
+            </if>
+            <if test='vo.isTrainLastYear == "N"'>
+                and (t4.last_year_train != 1 or t4.last_year_train is null)
+            </if>
         </if>
-        <if test='vo.warningStartTime != null and vo.warningStartTime !="" and vo.warningEndTime != null and vo.warningEndTime !="" '>
-            and t.WARNING_TIME between DATE_FORMAT(#{vo.warningStartTime,jdbcType=VARCHAR},'%Y/%m/%d %H:%i:%s') and
-            DATE_FORMAT(#{vo.warningEndTime,jdbcType=VARCHAR},'%Y/%m/%d %H:%i:%s')
-        </if>
-        <if test='vo.hourMinSecondStart >0 or vo.hourMinSecondEnd>0'>
-            and extract(hour_second from t.warning_time) between #{vo.hourMinSecondStart,jdbcType=NUMERIC} and  #{vo.hourMinSecondEnd,jdbcType=NUMERIC}
-        </if>
-        <if test='vo.search != null and vo.search != ""'>
-            AND t.WARNING_INFO LIKE concat('%' , TRIM(#{vo.search,jdbcType=VARCHAR}) , '%')
-        </if>
-    </sql>
-    <sql id ="warningListWithOutProcess">
-        select c.* from (
-        select a.* from(
-        <include refid="selectCols"/>
-        <if test='vo != null'>
-            <where>
-                <include refid="query"/>
-            </where>
-        </if>
-        ) a union all
-        select b.* from(
-        <include refid="selectOffLineCols"/>
-        <if test='vo != null'>
-            <where>
-                <include refid="query"/>
-            </where>
-        </if>
-        ) b
-        ) c order by c.WARNING_TIME desc
+        <!-- <if test='vo.latestTrainDay != null  and vo.latestTrainDaySelect != null and vo.latestTrainDaySelect !=""'>
+            and t8.latest_train_day ${vo.latestTrainDaySelect} #{vo.latestTrainDay}
+        </if>-->
     </sql>
 
-    <sql id ="orderedWarningListWithOutProcess">
-        SELECT * FROM
-        (
+    <sql id="queryBpid">
+        <if test='vo.deptFirst != null and vo.deptFirst !=""'>
+            <foreach collection="vo.deptFirst.split(',')" open="and (t.dept_first =" item="item" separator="or t.dept_first = "
+              close=")">
+                #{item,jdbcType=VARCHAR}
+            </foreach>
+        </if>
+        <if test='vo.personType != null and vo.personType !=""'>
+            <if test='vo.personType == "OTH"'>
+                and (LOWER(t.person_work_status) = 'OTH' or LOWER(t.person_work_status) = 'EX_OTH' or t.person_work_status ='' or t.person_work_status is null)
+            </if>
+            <if test='vo.personType == "EMP"'>
+                and (LOWER(t.person_work_status) = 'EMP' or LOWER(t.person_work_status) = 'EX_EMP')
+            </if>
+        </if>
+        <if test='vo.employedStartDate != null and vo.employedStartDate !=""'>
+            <![CDATA[
+				AND SUBSTR( t.original_enter_date, 1, 10 ) >= #{vo.employedStartDate}
+			]]>
+        </if>
+        <if test='vo.employedEndDate != null and vo.employedEndDate !=""'>
+            <![CDATA[
+				AND SUBSTR( t.original_enter_date, 1, 10 ) <= #{vo.employedEndDate}
+			]]>
+        </if>
+        <if test='vo.name != null and vo.name !=""'>
+            and LOWER(t.chinese_name) like concat(concat('%', LOWER(#{vo.name,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.userName != null and vo.userName !=""'>
+            and LOWER(t.chinese_name) like concat(concat('%', LOWER(#{vo.userName,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.employeeId != null and vo.employeeId !=""'>
+            and t.employee_number like concat(UPPER(#{vo.employeeId,jdbcType=VARCHAR}),'%')
+        </if>
+        <if test='vo.dept != null and vo.dept !=""'>
+            and LOWER(t.dept_full_name) like concat(concat('%', LOWER(#{vo.dept,jdbcType=VARCHAR})),'%')
+        </if>
+    </sql>
+
+    <sql id="queryBpidTrain">
+        <if test='vo.deptFirst != null and vo.deptFirst !=""'>
+            <foreach collection="vo.deptFirst.split(',')" open="and (t5.dept_first =" item="item" separator="or t5.dept_first = "
+              close=")">
+                #{item,jdbcType=VARCHAR}
+            </foreach>
+        </if>
+        <if test='vo.personType != null and vo.personType !=""'>
+            <if test='vo.personType == "OTH"'>
+                and (LOWER(t5.personType) = 'OTH' or LOWER(t5.personType) = 'EX_OTH' or t5.personType ='' or t5.personType is null)
+            </if>
+            <if test='vo.personType == "EMP"'>
+                and (LOWER(t5.personType) = 'EMP' or LOWER(t5.personType) = 'EX_EMP')
+            </if>
+        </if>
+        <if test='vo.employedStartDate != null and vo.employedStartDate !=""'>
+            <![CDATA[
+				AND t5.employedDate >= #{vo.employedStartDate}
+			]]>
+        </if>
+        <if test='vo.employedEndDate != null and vo.employedEndDate !=""'>
+            <![CDATA[
+				AND t5.employedDate <= #{vo.employedEndDate}
+			]]>
+        </if>
+        <if test='vo.name != null and vo.name !=""'>
+            and LOWER(t5.NAME) like concat(concat('%', LOWER(#{vo.name,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.userName != null and vo.userName !=""'>
+            and LOWER(t5.NAME) like concat(concat('%', LOWER(#{vo.userName,jdbcType=VARCHAR})),'%')
+        </if>
+        <if test='vo.employeeId != null and vo.employeeId !=""'>
+            and t5.uuid = #{vo.employeeId,jdbcType=VARCHAR}
+        </if>
+        <if test='vo.dept != null and vo.dept !=""'>
+            and LOWER(t5.dept) like concat(concat('%', LOWER(#{vo.dept,jdbcType=VARCHAR})),'%')
+        </if>
+    </sql>
+
+    <sql id="queryTrain">
+        <if test='vo.isTrainThisYear != null and vo.isTrainThisYear !=""'>
+            <if test='vo.isTrainThisYear == "Y"'>
+                and t5.is_train_this_year = '是'
+            </if>
+            <if test='vo.isTrainThisYear == "N"'>
+                and t5.is_train_this_year = '否'
+            </if>
+        </if>
+        <if test='vo.isTrainLastYear != null and vo.isTrainLastYear !=""'>
+            <if test='vo.isTrainLastYear == "Y"'>
+                and t5.is_train_last_year = '是'
+            </if>
+            <if test='vo.isTrainLastYear == "N"'>
+                and t5.is_train_last_year = '否'
+            </if>
+        </if>
+        <if test='vo.latestTrainDay != null  and vo.latestTrainDaySelect != null and vo.latestTrainDaySelect !=""'>
+            and t5.latest_train_day ${vo.latestTrainDaySelect} #{vo.latestTrainDay}
+        </if>
+    </sql>
+
+    <sql id="queryExam">
+        <if test='vo.examStartDate != null and vo.examStartDate !=""'>
+            <![CDATA[
+				AND t5.latest_exam_date >= #{vo.examStartDate}
+			]]>
+        </if>
+        <if test='vo.examEndDate != null and vo.examEndDate !=""'>
+            <![CDATA[
+				AND t5.latest_exam_date <= #{vo.examEndDate}
+			]]>
+        </if>
+    </sql>
+
+    <select id="getPieData" resultType="map">
         SELECT
-        (
-        CASE
-        WHEN x.`STATUS` = 'open' THEN 1
-        WHEN x.`STATUS` = 'tracking' THEN 2
-        WHEN x.`STATUS` = 'done' THEN 3
-        WHEN x.`STATUS` = 'false' THEN 4
-        WHEN x.`STATUS` = 'filed' THEN 5
-        END
-        ) AS statusOrder,
-        x.*
+        count(1) as totalCount,
+        sum(CASE WHEN t3.this_year_train = 1 THEN 1 ELSE 0 END) AS isTrainCount,
+        sum(case when t3.this_year_train !=1 or t3.this_year_train is null then 1 else 0 end) as isNotTrainCount
         FROM
-        (         select a.* from(
-        <include refid="selectCols"/>
-        <if test='vo != null'>
-            <where>
-                <include refid="query"/>
-            </where>
-        </if>
-        ) a union all
-        select b.* from(
-        <include refid="selectOffLineCols"/>
-        <if test='vo != null'>
-            <where>
-                <include refid="query"/>
-            </where>
-        </if>
-        ) b ) x
-        ) y
-        ORDER BY
-        y.statusOrder,
-        y.warning_time DESC
-    </sql>
-    <sql id = "warningList">
-        select c.* from (
-        select a.* from(
-        <include refid="selectCols"/>
-        <if test='vo != null'>
-            <where>
-                <if test='vo.processBy =="business"'>
-                    and T.PROCESS_BY = 'business'
-                </if>
-                <if test='vo.processBy !="business"'>
-                    AND (T.PROCESS_BY = 'IT' or T.PROCESS_BY is null)
-                </if>
-                <include refid="query"/>
-                <include refid="warnTypeLimit"/>
-            </where>
-        </if>
-        ) a union all
-        select b.* from(
-        <include refid="selectOffLineCols"/>
-        <if test='vo != null'>
-            <where>
-                <if test='vo.processBy =="business"'>
-                    and T.PROCESS_BY = 'business'
-                </if>
-                <if test='vo.processBy !="business"'>
-                    AND (T.PROCESS_BY = 'IT' or T.PROCESS_BY is null)
-                </if>
-                <include refid="query"/>
-                <include refid="warnTypeLimit"/>
-            </where>
-        </if>
-        ) b
-        ) c order by c.WARNING_TIME desc
-    </sql>
-
-    <sql id="warnTypeLimit">
-        <if test='vo.isQueryLimit'>
-            <if test="vo.deptDimensions !=null and vo.deptDimensions.size()>0">
-                AND t.warning_person_dept REGEXP
-                <foreach collection="vo.deptDimensions" item="item" open="(" separator="|" close=")">
-                    #{item,jdbcType=VARCHAR}
-                </foreach>
-            </if>
-        </if>
-    </sql>
-
-    <select id="findWarningList" resultMap="adminMonitoring">
-        SELECT x.* FROM (<include refid="warningList"/>) x
-        limit #{page.mysqlStartIndex},#{page.pageSize}
-    </select>
-    <!-- 查询 -->
-    <select id="findWarningListCount" resultType="int">
-        SELECT count(1) from (<include refid="warningList"/>) x
-    </select>
-
-    <select id="findAllWarningList" resultMap="adminMonitoring">
-        <include refid="warningListWithOutProcess"/>
-    </select>
-
-    <select id="findOrderedWarningList" resultMap="adminMonitoring">
-        <include refid="orderedWarningListWithOutProcess"/>
-        limit #{page.mysqlStartIndex},#{page.pageSize}
-    </select>
-    <!-- 查询 -->
-    <select id="findOrderedWarningListCount" resultType="int">
-        SELECT count(*) from (<include refid="orderedWarningListWithOutProcess"/>) n
-    </select>
-
-    <select id="calcAllWarningList" resultType="java.util.Map">
+        BASE_PERSON_INFO_DISTRIBUTION t
+        LEFT JOIN (
         SELECT
-        IFNULL(sum(case when t.process_by= 'business' and status = 'done' then 1 else 0 end ),0) as eventNum,
-        count(1) as alarmNum
-        from (<include refid="warningListWithOutProcess"/>) t
-    </select>
-
-    <update id="handWarningInfo">
-        <if test='vos != null and vos.size()>0'>
-            <foreach collection="vos" item="vo" close=";" separator=";">
-                UPDATE t_occ_hr_itadminmonitoring set
-                <if test='vo.preventTime != null and vo.preventTime != ""'>
-                    prevent_time = #{vo.preventTime,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.remark != null and vo.remark != ""'>
-                    remark = #{vo.remark,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.status !="tracking" and vo.status !="跟踪中" '>
-                    <if test='vo.completedTime ==null '>
-                        completed_time = sysdate(),
-                    </if>
-                </if>
-                <if test='vo.dealer !=null and vo.dealer!=""'>
-                    DEALER = #{vo.dealer,jdbcType=VARCHAR},
-                </if>
-                <!--<if test='vo.monitorType !=null and vo.monitorType!=""'>-->
-                <if test='vo.monitorType !=null'>
-                    monitor_type = #{vo.monitorType,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.falseReason != null and vo.falseReason != "" and vo.falseReason != "handle".toString() '>
-                    FALSE_REASON = #{vo.falseReason,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.falseReason == "handle".toString()'>
-                    FALSE_REASON = '',
-                </if>
-                <if test='vo.status != null and vo.status != ""'>
-                    status = #{vo.status,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.hasSupport2 != null and vo.hasSupport2 != ""'>
-                    has_support_2 = #{vo.hasSupport2,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.supportPerson2 != null and vo.supportPerson2 != ""'>
-                    support_person_2 = #{vo.supportPerson2,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.checkPerson != null and vo.checkPerson != ""'>
-                    check_person = #{vo.checkPerson,jdbcType=VARCHAR},
-                </if>
-                <if test='vo.checkTime != null and vo.checkTime != ""'>
-                    check_time = sysdate(),
-                </if>
-                <if test='vo.processBy !="business"'>
-                    <if test='vo.trackingTime == null'>
-                        TRACKING_TIME = sysdate(),
-                    </if>
-                </if>
-                LAST_UPDATE_TIME = sysdate(),
-                LAST_UPDATE_USER =#{vo.userAccount,jdbcType=NUMERIC}
-                <if test='vo.id != null and !vo.id !=""'>
-                    where id=#{vo.id,jdbcType=NUMERIC}
-                </if>
+        t2.employee_id,
+        min( t2.is_training ) AS this_year_train
+        FROM
+        T_OCC_HR_SECURITY_TRAIN t2
+        WHERE t2.delete_flag ='N'
+        <![CDATA[ AND t2.train_date >= #{vo.thisYearStartDate} and t2.train_date <= #{vo.thisYearEndDate} ]]> GROUP BY
+        t2.employee_id)t3 on t.employee_number = t3.employee_id
+        where 1=1 and t.employed_flag = '1'
+        <if test='vo.deptFirst != null and vo.deptFirst !=""'>
+            <foreach collection="vo.deptFirst.split(',')" open="and (t.dept_first like" item="item" separator="or t.dept_first like "
+              close=")">
+                concat(concat('%', LOWER(#{item,jdbcType=VARCHAR})),'%')
             </foreach>
         </if>
-    </update>
-
-
-    <select id="getWarningTypeList" resultMap="adminMonitoring">
-        select distinct t1.warning_type from t_occ_hr_itadminmonitoring t1 join (<include refid="getModal"/>) t2 on t1.warning_type = t2.english_code where t1.PROCESS_BY ='business' and t1.warning_type is not null
-        union
-        select distinct t1.warning_type from t_occ_hr_itadminmonitoring_offline t1 join (<include refid="getModal"/>) t2 on t1.warning_type = t2.english_code where t1.PROCESS_BY='business' and t1.warning_type is not null
-    </select>
-
-    <select id="getBasicWarningTypeList" resultMap="adminMonitoring">
-        select distinct t1.warning_type from t_occ_hr_itadminmonitoring t1 join (<include refid="getModal"/>) t2 on t1.warning_type = t2.english_code where t1.warning_type is not null
-    </select>
-
-    <!-- 业务转it -->
-    <update id="businessToIt">
-        <foreach collection="list" item="item">
-            UPDATE t_occ_hr_itadminmonitoring
-            SET
-            <if test='item.dealer!=null and item.dealer!=""'>
-                dealer = #{item.dealer, jdbcType=VARCHAR},
+        <if test='vo.personType != null and vo.personType !=""'>
+            <if test='vo.personType == "OTH"'>
+                and (t.person_work_status = 'OTH' or t.person_work_status = 'EX_OTH' or t.person_work_status ='' or person_work_status is null)
             </if>
-            process_by = 'IT',
-            LAST_UPDATE_TIME = sysdate(),
-            REMARK =#{item.remark, jdbcType=VARCHAR}
-            WHERE ID = #{item.id, jdbcType=NUMERIC} ;
+            <if test='vo.personType == "EMP"'>
+                and (t.person_work_status = 'EMP' or t.person_work_status = 'EX_EMP')
+            </if>
+        </if>
+    </select>
+
+    <select id="getBarData" resultType="map">
+        SELECT
+        <if test='vo.selectDeptType == "first"'>
+            ifnull(t.dept_first,"") as deptName,
+        </if>
+        <if test='vo.selectDeptType == "second"'>
+            ifnull(t.dept_second,"") as deptName,
+        </if>
+        <if test='vo.selectDeptType == "minimum"'>
+            ifnull(t.dept_ch_name,"") as deptName,
+        </if>
+        count(1) as totalCount,
+        sum(CASE WHEN t3.this_year_train = 1 THEN 1 ELSE 0 END) AS isTrainCount,
+        sum(case when t3.this_year_train !=1 or t3.this_year_train is null then 1 else 0 end) as isNotTrainCount
+        FROM
+        BASE_PERSON_INFO_DISTRIBUTION t
+        LEFT JOIN (
+        SELECT
+        t2.employee_id,
+        min( t2.is_training ) AS this_year_train
+        FROM
+        T_OCC_HR_SECURITY_TRAIN t2
+        WHERE t2.delete_flag ='N'
+        <![CDATA[ AND t2.train_date >= #{vo.thisYearStartDate} and t2.train_date <= #{vo.thisYearEndDate} ]]> GROUP BY
+        t2.employee_id)t3 on t.employee_number = t3.employee_id
+        where 1=1 and t.employed_flag = '1'
+        <if test='vo.deptFirst != null and vo.deptFirst !=""'>
+            <foreach collection="vo.deptFirst.split(',')" open="and (t.dept_first like" item="item" separator="or t.dept_first like "
+              close=")">
+                concat(concat('%', LOWER(#{item,jdbcType=VARCHAR})),'%')
+            </foreach>
+        </if>
+        <if test='vo.personType != null and vo.personType !=""'>
+            <if test='vo.personType == "OTH"'>
+                and (t.person_work_status = 'OTH' or t.person_work_status = 'EX_OTH' or t.person_work_status ='' or person_work_status is null)
+            </if>
+            <if test='vo.personType == "EMP"'>
+                and (t.person_work_status = 'EMP' or t.person_work_status = 'EX_EMP')
+            </if>
+        </if>
+        <if test='vo.selectDeptType == "first"'>
+            group by t.dept_first
+        </if>
+        <if test='vo.selectDeptType == "second"'>
+            group by t.dept_second
+        </if>
+        <if test='vo.selectDeptType == "minimum"'>
+            group by t.dept_ch_name
+        </if>
+    </select>
+
+    <select id="getUserId" resultType="map">
+        select employee_number,uuid  from base_person_info_distribution where
+        employee_number in
+        <foreach collection='employeeIds' item="employeeId" open="(" separator="," close=")">
+            UPPER(#{employeeId})
         </foreach>
-    </update>
-
-    <!-- 根据ID查询告警信息 -->
-    <select id="findWarningInfo" resultMap="adminMonitoring">
-        <include refid="selectAll"/>
-        WHERE ID = #{vo.id, jdbcType=NUMERIC}
     </select>
 
-    <!-- 根据模糊warn_id查询告警信息 -->
-    <select id="findWarningInfoLikeId" resultMap="adminMonitoring">
-        <include refid="selectAll"/>
-        WHERE WARNING_ID like concat(#{vo.warningId, jdbcType=VARCHAR},'%')
-    </select>
-
-    <select id="statisticsAlarmIndicators" resultType="java.util.Map">
-        select
-            processCount,
-            totalCount,
-            ROUND(CASE WHEN b.trackingCount = 0 THEN 0 ELSE b.handleTime / b.trackingCount END, 2) AS handleDuration
-        from (
-        SELECT
-            sum( CASE WHEN process_by = 'business' and status = 'done' THEN 1 ELSE 0 END ) AS processCount,
-            count(*) AS totalCount,
-            sum(case when a.tracking_time is not null and a.status != 'open' then 1 else 0 end) as trackingCount,
-            sum(case when a.status != 'open' then TIMESTAMPDIFF(second,a.OCCURRENCE_TIME,a.tracking_time)/(60*60)  else 0 end) as handleTime
-        FROM
+    <insert id="insertItportrait">
+        insert  into it_employee_portrait (
+        rowKey,
+        employee_id,
+        employee_name
+        ) values
+        <foreach collection="vos" item="vo" index="index" separator=",">
             (
-            SELECT
-                process_by,t.tracking_time, t.OCCURRENCE_TIME, t.status
-            FROM
-                t_occ_hr_itadminmonitoring_offline t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
-            WHERE
-                warning_time BETWEEN concat( YEAR ( now()), '-01-01 00:00:00' )
-                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59')
-                AND t.model_state = '已上线'
-                AND delete_flg = 'N'
-            UNION ALL
-            SELECT
-                process_by,t.tracking_time, t.OCCURRENCE_TIME, t.status
-            FROM
-                t_occ_hr_itadminmonitoring t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
-            WHERE
-                warning_time BETWEEN concat( YEAR ( now()), '-01-01 00:00:00' )
-                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59')
-                AND t.model_state = '已上线'
-                AND delete_flg = 'N'
-            ) a )b
-    </select>
+            #{vo.rowKey,jdbcType=VARCHAR},
+            #{vo.employee_id,jdbcType=VARCHAR},
+            #{vo.employee_name,jdbcType=VARCHAR}
+            )
+        </foreach>
+        on duplicate key update
+        rowKey = values(rowKey),
+        employee_id = values(employee_id)
+    </insert>
 
 
-    <select id="todayStatisticsAlarmIndicators" resultType="java.util.Map">
-        SELECT
-            sum( CASE WHEN process_by = 'business' and status = 'done' THEN 1 ELSE 0 END ) AS processCount,
-            count(*) AS totalCount
-        FROM
-            (
-            SELECT
-                process_by,status
-            FROM
-                t_occ_hr_itadminmonitoring_offline t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
-            WHERE
-                warning_time BETWEEN DATE_FORMAT( now(), '%Y-%m-%d 00:00:00' )
-                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59' )
-                AND t.model_state = '已上线'
-                AND delete_flg = 'N' UNION ALL
-            SELECT
-                process_by,status
-            FROM
-                t_occ_hr_itadminmonitoring t join (<include refid="getDistinctModal"/>) t1 on t.WARNING_TYPE = t1.english_code
-            WHERE
-                warning_time BETWEEN DATE_FORMAT( now(), '%Y-%m-%d 00:00:00' )
-                AND DATE_FORMAT( now(), '%Y-%m-%d 23:59:59' )
-                AND t.model_state = '已上线'
-                AND delete_flg = 'N'
-            ) a
-    </select>
 </mapper>
-
