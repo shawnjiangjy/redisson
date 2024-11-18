@@ -1,8 +1,0 @@
-1、注册了一个Filter 拦截请求，获取请求的url，cookie等信息
-   见：RequestContextFilter
-   RequestContextInitUtil：具体如何解析请求中的appid,语言，token等信息
-   RequestLangUtil：获取请求语言工具类
-   RequestUtil：获取ip
-   DomainResolver：获取域名
-   RequestContextManager：持有线程本地变量，将每个线程的请求信息隔离
-
